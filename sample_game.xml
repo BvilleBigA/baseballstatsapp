@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bsgame source="PrestoSports" version="7.13.0" generated="02/11/2026">
+  <venue visid="STATS2" homeid="STATS1" visname="Stats2" homename="Stats1" date="4/17/2025" location="Test Location" stadium="" duration="2:00" delay="" attend="0" leaguegame="Y" start="3:00 PM" schedinn="7" weather="">
+    <umpires></umpires>
+    <notes>
+      <note text=""></note>
+    </notes>
+    <rules batters="9,9" usedh="N"></rules>
+  </venue>
+  <team vh="V" code="DemoStats2" id="STATS2" name="Stats2" record="0-0">
+    <linescore line="0,0,0,0,0" runs="0" hits="5" errs="1" lob="3">
+      <lineinn inn="1" score="0"></lineinn>
+      <lineinn inn="2" score="0"></lineinn>
+      <lineinn inn="3" score="0"></lineinn>
+      <lineinn inn="4" score="0"></lineinn>
+      <lineinn inn="5" score="0"></lineinn>
+    </linescore>
+    <starters>
+      <starter spot="1" name="R. Boone" uni="0" pos="c"></starter>
+      <starter spot="2" name="K. Koeltzow" uni="1" pos="1b"></starter>
+      <starter spot="3" name="G. Lyons" uni="3" pos="2b"></starter>
+      <starter spot="4" name="S. Saile" uni="4" pos="3b"></starter>
+      <starter spot="5" name="T. Snow" uni="5" pos="ss"></starter>
+      <starter spot="6" name="P. Knight" uni="6" pos="lf"></starter>
+      <starter spot="7" name="O. Rains" uni="7" pos="cf"></starter>
+      <starter spot="8" name="K. Hansen" uni="9" pos="rf"></starter>
+      <starter spot="9" name="N. Mendes" uni="11" pos="p"></starter>
+      <starter spot="10" name="M. Donihoo" uni="12" pos="dp"></starter>
+    </starters>
+    <batords>
+      <batord spot="1" name="R. Boone" uni="0" pos="c"></batord>
+      <batord spot="2" name="K. Koeltzow" uni="1" pos="1b"></batord>
+      <batord spot="3" name="G. Lyons" uni="3" pos="2b"></batord>
+      <batord spot="4" name="S. Saile" uni="4" pos="3b"></batord>
+      <batord spot="5" name="T. Snow" uni="5" pos="ss"></batord>
+      <batord spot="6" name="P. Knight" uni="6" pos="lf"></batord>
+      <batord spot="7" name="G. Juarez" uni="45" pos="pr"></batord>
+      <batord spot="8" name="K. Hansen" uni="9" pos="rf"></batord>
+      <batord spot="9" name="N. May" uni="19" pos="p"></batord>
+      <batord spot="10" name="M. Donihoo" uni="12" pos="dp"></batord>
+    </batords>
+    <totals>
+      <hitting ab="19" r="0" h="5" rbi="0" double="0" triple="0" hr="0" bb="0" sb="0" cs="0" hbp="0" sh="0" sf="0" so="5" gdp="0" ibb="0" picked="0" ground="5" fly="4" kl="1" hitdp="0" hittp="0"></hitting>
+      <fielding po="12" a="2" e="1" pb="0" ci="0" sba="1"></fielding>
+      <pitching ip="4.0" ab="21" bb="0" bf="22" bk="0" double="2" er="5" fly="7" ground="3" h="9" hbp="1" hr="0" ibb="0" kl="0" r="5" so="2" triple="0" wp="0" picked="0" sha="0" sfa="0" gdp="0" pitches="45" strikes="33"></pitching>
+    </totals>
+    <player name="R. Boone" shortname="R. Boone" uni="0" gp="1" gs="1" spot="1" code="1" bats="R" throws="R" pos="c" atpos="c" playerId="zif4vvakqvk297w6">
+      <hitting r="0" h="1" ab="3" rbi="0" so="1" ground="1" slg=".333" obp=".333" ops=".667"></hitting>
+      <fielding po="2" a="0" e="1" sba="1"></fielding>
+    </player>
+    <player name="K. Koeltzow" shortname="K. Koeltzow" uni="1" gp="1" gs="1" spot="2" code="2" bats="R" throws="R" pos="1b" atpos="1b" playerId="kra83xis2c2tp1mz">
+      <hitting r="0" h="1" ab="2" rbi="0" ground="1" slg=".500" obp=".500" ops="1.000"></hitting>
+      <fielding po="1" a="0" e="0"></fielding>
+    </player>
+    <player name="G. Lyons" shortname="G. Lyons" uni="3" gp="1" gs="1" spot="3" code="3" bats="R" throws="R" pos="2b" atpos="2b" playerId="dwqywldd2x02l099">
+      <hitting r="0" h="0" ab="2" rbi="0" so="1" ground="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="1" a="1" e="0"></fielding>
+    </player>
+    <player name="S. Saile" shortname="S. Saile" uni="4" gp="1" gs="1" spot="4" code="4" bats="R" throws="R" pos="3b" atpos="3b" playerId="e0qxhjdiffup4d24">
+      <hitting r="0" h="1" ab="2" rbi="0" ground="1" slg=".500" obp=".500" ops="1.000"></hitting>
+      <fielding po="0" a="1" e="0"></fielding>
+    </player>
+    <player name="T. Snow" shortname="T. Snow" uni="5" gp="1" gs="1" spot="5" code="5" bats="R" throws="R" pos="ss" atpos="ss" playerId="5frdsje6hyl7ckhh">
+      <hitting r="0" h="0" ab="2" rbi="0" fly="2" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="2" a="0" e="0"></fielding>
+    </player>
+    <player name="P. Knight" shortname="P. Knight" uni="6" gp="1" gs="1" spot="6" code="6" bats="R" throws="R" pos="lf" atpos="lf" playerId="zqyrk431vm3k51my">
+      <hitting r="0" h="1" ab="2" rbi="0" ground="1" slg=".500" obp=".500" ops="1.000"></hitting>
+      <fielding po="3" a="0" e="0"></fielding>
+    </player>
+    <player name="O. Rains" shortname="O. Rains" uni="7" gp="1" gs="1" spot="7" code="7" bats="R" throws="R" pos="cf" atpos="cf" playerId="0z055g2cb04qfba9">
+      <hitting r="0" h="1" ab="2" rbi="0" so="1" kl="1" slg=".500" obp=".500" ops="1.000"></hitting>
+      <fielding po="1" a="0" e="0"></fielding>
+    </player>
+    <player name="G. Juarez" shortname="G. Juarez" uni="45" gp="1" sub="1" spot="7" code="7" bats="R" throws="R" pos="pr" atpos="pr">
+      <hitting r="0" h="0" ab="0" rbi="0" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="0" a="0" e="0"></fielding>
+    </player>
+    <player name="K. Hansen" shortname="K. Hansen" uni="9" gp="1" gs="1" spot="8" code="8" bats="R" throws="R" pos="rf" atpos="rf" playerId="juj5s1epssm1nl3e">
+      <hitting r="0" h="0" ab="2" rbi="0" so="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="2" a="0" e="0"></fielding>
+    </player>
+    <player name="N. Mendes" shortname="N. Mendes" uni="11" gp="1" gs="1" spot="9" code="9" bats="R" throws="R" pos="p" atpos="p" playerId="7a0hy67ao1ejau6v">
+      <hitting r="0" h="0" ab="1" rbi="0" fly="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="0" a="0" e="0"></fielding>
+      <pitching appear="1" ip="3.0" gs="1" ab="15" bb="0" bf="15" double="1" er="3" fly="6" ground="1" h="6" r="3" so="2" pitches="36" whip="2.00" loss="0-1" strikes="27"></pitching>
+    </player>
+    <player name="N. May" shortname="N. May" uni="19" gp="1" sub="1" spot="9" code="9" bats="R" throws="R" pos="p" atpos="p">
+      <hitting r="0" h="0" ab="1" rbi="0" so="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="0" a="0" e="0" sba="1"></fielding>
+      <pitching appear="2" ip="1.0" ab="6" bf="7" double="1" er="2" fly="1" ground="2" h="3" hbp="1" r="2" pitches="9" whip="3.00" strikes="6"></pitching>
+    </player>
+    <player name="M. Donihoo" shortname="M. Donihoo" uni="12" gp="1" gs="1" spot="10" code="10" bats="R" throws="R" pos="dp" atpos="dp" playerId="7on8wd7q8toj7igl">
+      <hitting r="0" h="0" ab="0" rbi="0" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="0" a="0" e="0"></fielding>
+    </player>
+    <player name="M. McAdoo" shortname="M. McAdoo" uni="13" gp="0" pos="" spot="0" code="" bats="R" throws="R"></player>
+    <player name="J. Coleman" shortname="J. Coleman" uni="24" gp="0" pos="" spot="0" code="" bats="R" throws="R"></player>
+  </team>
+  <team vh="H" code="DemoStats1" id="STATS1" name="Stats1" record="0-0">
+    <linescore line="1,0,2,2,X" runs="5" hits="9" errs="0" lob="5">
+      <lineinn inn="1" score="1"></lineinn>
+      <lineinn inn="2" score="0"></lineinn>
+      <lineinn inn="3" score="2"></lineinn>
+      <lineinn inn="4" score="2"></lineinn>
+      <lineinn inn="5" score="X"></lineinn>
+    </linescore>
+    <starters>
+      <starter spot="1" name="A. Stephen" uni="1" pos="c"></starter>
+      <starter spot="2" name="E. Farnan" uni="2" pos="1b"></starter>
+      <starter spot="3" name="A. Huffman" uni="3" pos="2b"></starter>
+      <starter spot="4" name="R. McGovern" uni="4" pos="3b"></starter>
+      <starter spot="5" name="L. Spring" uni="5" pos="ss"></starter>
+      <starter spot="6" name="K. Maggard" uni="9" pos="lf"></starter>
+      <starter spot="7" name="C. Minnick" uni="11" pos="cf"></starter>
+      <starter spot="8" name="E. Vodnansky" uni="12" pos="rf"></starter>
+      <starter spot="9" name="L. Good" uni="14" pos="p"></starter>
+      <starter spot="10" name="M. Gallagher" uni="15" pos="dp"></starter>
+    </starters>
+    <batords>
+      <batord spot="1" name="A. Stephen" uni="1" pos="c"></batord>
+      <batord spot="2" name="E. Farnan" uni="2" pos="1b"></batord>
+      <batord spot="3" name="A. Huffman" uni="3" pos="2b"></batord>
+      <batord spot="4" name="R. McGovern" uni="4" pos="3b"></batord>
+      <batord spot="5" name="L. Spring" uni="5" pos="ss"></batord>
+      <batord spot="6" name="K. Maggard" uni="9" pos="lf"></batord>
+      <batord spot="7" name="C. Minnick" uni="11" pos="cf"></batord>
+      <batord spot="8" name="E. Vodnansky" uni="12" pos="rf"></batord>
+      <batord spot="9" name="L. Good" uni="14" pos="p"></batord>
+      <batord spot="10" name="M. Gallagher" uni="15" pos="dp"></batord>
+    </batords>
+    <totals>
+      <hitting ab="21" r="5" h="9" rbi="6" double="2" triple="0" hr="0" bb="0" sb="1" cs="0" hbp="1" sh="0" sf="0" so="2" gdp="0" ibb="0" picked="0" ground="3" fly="7" kl="0" hitdp="0" hittp="0"></hitting>
+      <fielding po="15" a="6" e="0" pb="0" ci="0"></fielding>
+      <pitching ip="5.0" ab="19" bb="0" bf="19" bk="0" double="0" er="0" fly="4" ground="5" h="5" hbp="0" hr="0" ibb="0" kl="1" r="0" so="5" triple="0" wp="1" picked="0" sha="0" sfa="0" gdp="0" pitches="42" strikes="34" sho="1"></pitching>
+    </totals>
+    <player name="A. Stephen" shortname="A. Stephen" uni="1" gp="1" gs="1" spot="1" code="1" bats="R" throws="R" pos="c" atpos="c" playerId="hdsk80surrl1jr4z">
+      <hitting r="2" h="1" ab="2" rbi="0" double="1" hbp="1" ground="1" slg="1.000" obp=".667" ops="1.667"></hitting>
+      <fielding po="6" a="0" e="0"></fielding>
+    </player>
+    <player name="E. Farnan" shortname="E. Farnan" uni="2" gp="1" gs="1" spot="2" code="2" bats="R" throws="R" class="2" pos="1b" atpos="1b" playerId="6r2okbnw1wklbnt5">
+      <hitting r="1" h="2" ab="3" rbi="1" fly="1" slg=".667" obp=".667" ops="1.333"></hitting>
+      <fielding po="5" a="0" e="0"></fielding>
+    </player>
+    <player name="A. Huffman" shortname="A. Huffman" uni="3" gp="1" gs="1" spot="3" code="3" bats="R" throws="R" class="4" pos="2b" atpos="2b" playerId="7xq34tjvqhm22300">
+      <hitting r="1" h="3" ab="3" rbi="3" double="1" slg="1.333" obp="1.000" ops="2.333"></hitting>
+      <fielding po="0" a="2" e="0"></fielding>
+    </player>
+    <player name="R. McGovern" shortname="R. McGovern" uni="4" gp="1" gs="1" spot="4" code="4" bats="R" throws="R" class="2" pos="3b" atpos="3b" playerId="e1my88q6eoqeu80v">
+      <hitting r="0" h="1" ab="3" rbi="0" so="1" fly="1" slg=".333" obp=".333" ops=".667"></hitting>
+      <fielding po="0" a="1" e="0"></fielding>
+    </player>
+    <player name="L. Spring" shortname="L. Spring" uni="5" gp="1" gs="1" spot="5" code="5" bats="R" throws="R" class="8" pos="ss" atpos="ss" playerId="kjeydjh0ex65z4jq">
+      <hitting r="0" h="1" ab="2" rbi="2" fly="1" slg=".500" obp=".500" ops="1.000"></hitting>
+      <fielding po="0" a="2" e="0"></fielding>
+    </player>
+    <player name="K. Maggard" shortname="K. Maggard" uni="9" gp="1" gs="1" spot="6" code="6" bats="R" throws="R" pos="lf" atpos="lf" playerId="z0aqt5f259vci8ve">
+      <hitting r="0" h="0" ab="2" rbi="0" so="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="3" a="0" e="0"></fielding>
+    </player>
+    <player name="C. Minnick" shortname="C. Minnick" uni="11" gp="1" gs="1" spot="7" code="7" bats="R" throws="R" class="8" pos="cf" atpos="cf" playerId="bf914z7wb525l3c5">
+      <hitting r="0" h="1" ab="2" rbi="0" fly="1" slg=".500" obp=".500" ops="1.000"></hitting>
+      <fielding po="0" a="1" e="0"></fielding>
+    </player>
+    <player name="E. Vodnansky" shortname="E. Vodnansky" uni="12" gp="1" gs="1" spot="8" code="8" bats="R" throws="R" pos="rf" atpos="rf" playerId="8rv6n22l2178279o">
+      <hitting r="0" h="0" ab="2" rbi="0" ground="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="1" a="0" e="0"></fielding>
+    </player>
+    <player name="L. Good" shortname="L. Good" uni="14" gp="1" gs="1" spot="9" code="9" bats="R" throws="R" class="4" pos="p" atpos="p" playerId="g15vwxdp9n5ihcuk">
+      <hitting r="1" h="0" ab="2" rbi="0" sb="1" ground="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="0" a="0" e="0"></fielding>
+      <pitching appear="1" ip="5.0" cg="1" sho="1" gs="1" ab="19" bb="0" bf="19" er="0" fly="4" ground="5" h="5" kl="1" r="0" so="5" wp="1" pitches="42" whip="1.00" win="1-0" strikes="34"></pitching>
+    </player>
+    <player name="M. Gallagher" shortname="M. Gallagher" uni="15" gp="1" gs="1" spot="10" code="10" bats="R" throws="R" pos="dp" atpos="dp" playerId="ker8rx1i4xkvtxur">
+      <hitting r="0" h="0" ab="0" rbi="0" slg=".000" obp=".000" ops=".000"></hitting>
+      <fielding po="0" a="0" e="0"></fielding>
+    </player>
+    <player name="A. Newcomer" shortname="A. Newcomer" uni="16" gp="0" pos="" spot="0" code="" bats="R" throws="R" class="8"></player>
+    <player name="E. Berry" shortname="E. Berry" uni="20" gp="0" pos="" spot="0" code="" bats="R" throws="R" class="1"></player>
+  </team>
+  <plays format="summary">
+    <inning number="1">
+      <batting vh="V" id="STATS2">
+        <play seq="1" outs="0" batter="R. Boone" pitcher="L. Good">
+          <narrative text="R. Boone singled to pitcher."></narrative>
+          <pitches name="L. Good" text="FP" b="0" s="2"></pitches>
+        </play>
+        <play seq="2" outs="0" batter="K. Koeltzow" pitcher="L. Good">
+          <narrative text="K. Koeltzow singled to catcher, bunt; R. Boone advanced to second."></narrative>
+          <pitches name="L. Good" text="FP" b="0" s="2"></pitches>
+        </play>
+        <play seq="3" outs="0" batter="G. Lyons" pitcher="L. Good">
+          <narrative text="G. Lyons struck out swinging."></narrative>
+          <pitches name="L. Good" text="FBFS" b="1" s="3"></pitches>
+        </play>
+      </batting>
+      <batting vh="H" id="STATS1">
+        <play seq="6" outs="0" batter="A. Stephen" pitcher="N. Mendes">
+          <narrative text="A. Stephen doubled to left center."></narrative>
+          <pitches name="N. Mendes" text="BP" b="1" s="1"></pitches>
+        </play>
+        <play seq="8" outs="1" batter="A. Huffman" pitcher="N. Mendes">
+          <narrative text="A. Huffman singled up the middle, RBI; A. Stephen scored."></narrative>
+          <pitches name="N. Mendes" text="BFP" b="1" s="2"></pitches>
+        </play>
+      </batting>
+    </inning>
+  </plays>
+  <status complete="Y"></status>
+</bsgame>

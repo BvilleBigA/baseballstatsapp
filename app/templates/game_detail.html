@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}{{ game.visitor_team.name }} @ {{ game.home_team.name }} - {{ game.date }}{% endblock %}
+{% block content %}
+<h1>
+    <a href="{{ url_for('main.team_detail', team_id=game.visitor_team.id) }}" class="team-link">{{ game.visitor_team.name }}</a>
+    {{ game.visitor_runs }} &ndash;
+    <a href="{{ url_for('main.team_detail', team_id=game.home_team.id) }}" class="team-link">{{ game.home_team.name }}</a>
+    {{ game.home_runs }}
+</h1>
+<p style="color: var(--text-light); margin-bottom: 1rem;">
+    {{ game.date }} &mdash; {{ game.location }}
+    {% if game.start_time %} &mdash; {{ game.start_time }}{% endif %}
+    {% if game.duration %} &mdash; Duration: {{ game.duration }}{% endif %}
+    {% if game.weather %} &mdash; {{ game.weather }}{% endif %}
+    {% if game.is_complete %}<span class="badge win" style="margin-left: 0.5rem;">Final</span>{% endif %}
+</p>
+
+<!-- Line Score -->
+<div class="card">
+    <h2>Line Score</h2>
+    <div class="table-responsive">
+        <table class="linescore-table">
+            <thead>
+                <tr>
+                    <th style="text-align: left; min-width: 120px;">Team</th>
+                    {% for inn in innings %}
+                    <th>{{ inn.inning }}</th>
+                    {% endfor %}
+                    <th class="totals-col">R</th>
+                    <th>H</th>
+                    <th>E</th>
+                    <th>LOB</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="text-align: left; font-weight: 700;">{{ game.visitor_team.name }}</td>
+                    {% for inn in innings %}
+                    <td>{{ inn.visitor_score }}</td>
+                    {% endfor %}
+                    <td class="totals-col">{{ game.visitor_runs }}</td>
+                    <td>{{ game.visitor_hits }}</td>
+                    <td>{{ game.visitor_errors }}</td>
+                    <td>{{ game.visitor_lob }}</td>
+                </tr>
+                <tr>
+                    <td style="text-align: left; font-weight: 700;">{{ game.home_team.name }}</td>
+                    {% for inn in innings %}
+                    <td>{{ inn.home_score }}</td>
+                    {% endfor %}
+                    <td class="totals-col">{{ game.home_runs }}</td>
+                    <td>{{ game.home_hits }}</td>
+                    <td>{{ game.home_errors }}</td>
+                    <td>{{ game.home_lob }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="section-tabs" data-group="box">
+    <button class="active" data-tab="batting" onclick="showTab('box','batting')">Batting</button>
+    <button data-tab="pitching" onclick="showTab('box','pitching')">Pitching</button>
+    <button data-tab="plays" onclick="showTab('box','plays')">Play-by-Play</button>
+</div>
+
+<!-- Batting Box Score -->
+<div id="box-batting" class="tab-content active" data-group="box">
+    {% macro batting_table(team_name, stats) %}
+    <div class="card">
+        <h3>{{ team_name }}</h3>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Player</th>
+                        <th>Pos</th>
+                        <th>AB</th>
+                        <th>R</th>
+                        <th>H</th>
+                        <th>RBI</th>
+                        <th>2B</th>
+                        <th>3B</th>
+                        <th>HR</th>
+                        <th>BB</th>
+                        <th>SO</th>
+                        <th>SB</th>
+                        <th>HBP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in stats %}
+                    <tr>
+                        <td style="text-align: left;">
+                            {% if stat.is_sub %}<span style="padding-left: 1rem;"></span>{% endif %}
+                            <a href="{{ url_for('main.player_detail', player_id=stat.player.id) }}" class="player-link">{{ stat.player.name }}</a>
+                        </td>
+                        <td>{{ stat.position }}</td>
+                        <td>{{ stat.ab }}</td>
+                        <td>{{ stat.r }}</td>
+                        <td>{{ stat.h }}</td>
+                        <td>{{ stat.rbi }}</td>
+                        <td>{{ stat.doubles }}</td>
+                        <td>{{ stat.triples }}</td>
+                        <td>{{ stat.hr }}</td>
+                        <td>{{ stat.bb }}</td>
+                        <td>{{ stat.so }}</td>
+                        <td>{{ stat.sb }}</td>
+                        <td>{{ stat.hbp }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr style="font-weight: 700; border-top: 2px solid var(--primary);">
+                        <td style="text-align: left;">Totals</td>
+                        <td></td>
+                        <td>{{ stats | sum(attribute='ab') }}</td>
+                        <td>{{ stats | sum(attribute='r') }}</td>
+                        <td>{{ stats | sum(attribute='h') }}</td>
+                        <td>{{ stats | sum(attribute='rbi') }}</td>
+                        <td>{{ stats | sum(attribute='doubles') }}</td>
+                        <td>{{ stats | sum(attribute='triples') }}</td>
+                        <td>{{ stats | sum(attribute='hr') }}</td>
+                        <td>{{ stats | sum(attribute='bb') }}</td>
+                        <td>{{ stats | sum(attribute='so') }}</td>
+                        <td>{{ stats | sum(attribute='sb') }}</td>
+                        <td>{{ stats | sum(attribute='hbp') }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endmacro %}
+
+    {{ batting_table(game.visitor_team.name, v_batting) }}
+    {{ batting_table(game.home_team.name, h_batting) }}
+</div>
+
+<!-- Pitching Box Score -->
+<div id="box-pitching" class="tab-content" data-group="box">
+    {% macro pitching_table(team_name, stats) %}
+    <div class="card">
+        <h3>{{ team_name }}</h3>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Pitcher</th>
+                        <th>IP</th>
+                        <th>H</th>
+                        <th>R</th>
+                        <th>ER</th>
+                        <th>BB</th>
+                        <th>SO</th>
+                        <th>HR</th>
+                        <th>HBP</th>
+                        <th>WP</th>
+                        <th>BF</th>
+                        <th>P-S</th>
+                        <th>Dec</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in stats %}
+                    <tr>
+                        <td style="text-align: left;">
+                            <a href="{{ url_for('main.player_detail', player_id=stat.player.id) }}" class="player-link">{{ stat.player.name }}</a>
+                        </td>
+                        <td>{{ stat.ip }}</td>
+                        <td>{{ stat.h }}</td>
+                        <td>{{ stat.r }}</td>
+                        <td>{{ stat.er }}</td>
+                        <td>{{ stat.bb }}</td>
+                        <td>{{ stat.so }}</td>
+                        <td>{{ stat.hr }}</td>
+                        <td>{{ stat.hbp }}</td>
+                        <td>{{ stat.wp }}</td>
+                        <td>{{ stat.bf }}</td>
+                        <td>{{ stat.pitches }}-{{ stat.strikes }}</td>
+                        <td>
+                            {% if stat.win %}W{% elif stat.loss %}L{% elif stat.save %}S{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endmacro %}
+
+    {{ pitching_table(game.visitor_team.name, v_pitching) }}
+    {{ pitching_table(game.home_team.name, h_pitching) }}
+</div>
+
+<!-- Play-by-Play -->
+<div id="box-plays" class="tab-content" data-group="box">
+    <div class="card play-by-play">
+        <h2>Play-by-Play</h2>
+        {% set current_inning = [0] %}
+        {% set current_half = [''] %}
+        {% for play in plays %}
+            {% if play.inning != current_inning[0] or play.half != current_half[0] %}
+                {% if current_inning.append(play.inning) %}{% endif %}
+                {% if current_half.append(play.half) %}{% endif %}
+                {# Jinja2 workaround for mutable state #}
+                {% if current_inning | length > 1 %}{% if current_inning.pop(0) is not none %}{% endif %}{% endif %}
+                {% if current_half | length > 1 %}{% if current_half.pop(0) is not none %}{% endif %}{% endif %}
+                <div class="inning-header">
+                    {% if play.half == 'top' %}Top{% else %}Bottom{% endif %} of Inning {{ play.inning }}
+                </div>
+            {% endif %}
+            {% if play.narrative %}
+            <div class="play-item">
+                {{ play.narrative }}
+                {% if play.pitch_sequence %}
+                <span class="pitches">[{{ play.pitch_sequence }}]</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ league.name }}{% endblock %}
+{% block content %}
+<h1>{{ league.name }} <span style="font-size: 0.9rem; color: var(--text-light);">{{ league.sport | capitalize }} &mdash; {{ league.season }}</span></h1>
+
+<!-- Standings -->
+<div class="card">
+    <h2>Standings</h2>
+    {% if standings %}
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%">Team</th>
+                    <th>W</th>
+                    <th>L</th>
+                    <th>PCT</th>
+                    <th>RS</th>
+                    <th>RA</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in standings %}
+                <tr>
+                    <td><a href="{{ url_for('main.team_detail', team_id=row.team.id) }}" class="team-link">{{ row.team.name }}</a></td>
+                    <td>{{ row.w }}</td>
+                    <td>{{ row.l }}</td>
+                    <td>{{ row.pct }}</td>
+                    <td>{{ row.rs }}</td>
+                    <td>{{ row.ra }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color: var(--text-light);">No teams yet. Upload a game XML to get started.</p>
+    {% endif %}
+</div>
+
+<!-- Recent Games -->
+<div class="card">
+    <h2>Recent Games</h2>
+    {% if games %}
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th style="text-align: left;">Visitor</th>
+                    <th></th>
+                    <th style="text-align: left;">Home</th>
+                    <th>Score</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for game in games %}
+                <tr>
+                    <td style="text-align: left;">{{ game.date }}</td>
+                    <td style="text-align: left;">
+                        <a href="{{ url_for('main.team_detail', team_id=game.visitor_team.id) }}" class="team-link">{{ game.visitor_team.name }}</a>
+                    </td>
+                    <td style="text-align: center;">@</td>
+                    <td style="text-align: left;">
+                        <a href="{{ url_for('main.team_detail', team_id=game.home_team.id) }}" class="team-link">{{ game.home_team.name }}</a>
+                    </td>
+                    <td>
+                        {% if game.is_complete %}
+                            {{ game.visitor_runs }} - {{ game.home_runs }}
+                        {% else %}
+                            --
+                        {% endif %}
+                    </td>
+                    <td><a href="{{ url_for('main.game_detail', game_id=game.id) }}" class="player-link">Box Score</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color: var(--text-light);">No games yet.</p>
+    {% endif %}
+</div>
+
+<a href="{{ url_for('main.upload') }}" class="btn accent">Upload Game XML</a>
+{% endblock %}
