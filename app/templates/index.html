@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Baseball Stats - Home{% endblock %}
+{% block content %}
+<h1>Leagues</h1>
+
+{% if leagues %}
+<div class="stats-grid">
+    {% for league in leagues %}
+    <div class="card">
+        <h2><a href="{{ url_for('main.league_detail', league_id=league.id) }}" class="team-link">{{ league.name }}</a></h2>
+        <p>{{ league.sport | capitalize }} &mdash; {{ league.season }}</p>
+        <p style="color: var(--text-light); font-size: 0.85rem;">{{ league.teams | length }} team(s)</p>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <p>No leagues yet. Create one to get started.</p>
+</div>
+{% endif %}
+
+<div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+    <a href="{{ url_for('main.league_new') }}" class="btn">Create League</a>
+    <a href="{{ url_for('main.upload') }}" class="btn accent">Upload Game XML</a>
+</div>
+{% endblock %}

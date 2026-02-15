@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ team.name }}{% endblock %}
+{% block content %}
+<h1>{{ team.name }}</h1>
+{% if team.league %}
+<p style="margin-bottom: 1rem;"><a href="{{ url_for('main.league_detail', league_id=team.league.id) }}" class="player-link">&larr; {{ team.league.name }}</a></p>
+{% endif %}
+
+<!-- Tabs -->
+<div class="section-tabs" data-group="team">
+    <button class="active" data-tab="batting" onclick="showTab('team','batting')">Batting</button>
+    <button data-tab="pitching" onclick="showTab('team','pitching')">Pitching</button>
+    <button data-tab="schedule" onclick="showTab('team','schedule')">Schedule</button>
+</div>
+
+<!-- Batting -->
+<div id="team-batting" class="tab-content active" data-group="team">
+    <div class="card">
+        <h2>Batting Stats</h2>
+        {% if batting %}
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th style="text-align: left;">Player</th>
+                        <th>GP</th>
+                        <th>AB</th>
+                        <th>R</th>
+                        <th>H</th>
+                        <th>2B</th>
+                        <th>3B</th>
+                        <th>HR</th>
+                        <th>RBI</th>
+                        <th>BB</th>
+                        <th>SO</th>
+                        <th>SB</th>
+                        <th>CS</th>
+                        <th>AVG</th>
+                        <th>OBP</th>
+                        <th>SLG</th>
+                        <th>OPS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in batting %}
+                    <tr>
+                        <td>{{ row.player.uniform_number }}</td>
+                        <td style="text-align: left;"><a href="{{ url_for('main.player_detail', player_id=row.player.id) }}" class="player-link">{{ row.player.name }}</a></td>
+                        <td>{{ row.stats.gp }}</td>
+                        <td>{{ row.stats.ab }}</td>
+                        <td>{{ row.stats.r }}</td>
+                        <td>{{ row.stats.h }}</td>
+                        <td>{{ row.stats.doubles }}</td>
+                        <td>{{ row.stats.triples }}</td>
+                        <td>{{ row.stats.hr }}</td>
+                        <td>{{ row.stats.rbi }}</td>
+                        <td>{{ row.stats.bb }}</td>
+                        <td>{{ row.stats.so }}</td>
+                        <td>{{ row.stats.sb }}</td>
+                        <td>{{ row.stats.cs }}</td>
+                        <td>{{ row.stats.avg }}</td>
+                        <td>{{ row.stats.obp }}</td>
+                        <td>{{ row.stats.slg }}</td>
+                        <td>{{ row.stats.ops }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-light);">No batting stats yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Pitching -->
+<div id="team-pitching" class="tab-content" data-group="team">
+    <div class="card">
+        <h2>Pitching Stats</h2>
+        {% if pitching %}
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th style="text-align: left;">Player</th>
+                        <th>GP</th>
+                        <th>GS</th>
+                        <th>W</th>
+                        <th>L</th>
+                        <th>SV</th>
+                        <th>IP</th>
+                        <th>H</th>
+                        <th>R</th>
+                        <th>ER</th>
+                        <th>BB</th>
+                        <th>SO</th>
+                        <th>HR</th>
+                        <th>ERA</th>
+                        <th>WHIP</th>
+                        <th>P</th>
+                        <th>S</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in pitching %}
+                    <tr>
+                        <td>{{ row.player.uniform_number }}</td>
+                        <td style="text-align: left;"><a href="{{ url_for('main.player_detail', player_id=row.player.id) }}" class="player-link">{{ row.player.name }}</a></td>
+                        <td>{{ row.stats.gp }}</td>
+                        <td>{{ row.stats.gs }}</td>
+                        <td>{{ row.stats.w }}</td>
+                        <td>{{ row.stats.l }}</td>
+                        <td>{{ row.stats.sv }}</td>
+                        <td>{{ row.stats.ip }}</td>
+                        <td>{{ row.stats.h }}</td>
+                        <td>{{ row.stats.r }}</td>
+                        <td>{{ row.stats.er }}</td>
+                        <td>{{ row.stats.bb }}</td>
+                        <td>{{ row.stats.so }}</td>
+                        <td>{{ row.stats.hr }}</td>
+                        <td>{{ row.stats.era }}</td>
+                        <td>{{ row.stats.whip }}</td>
+                        <td>{{ row.stats.pitches }}</td>
+                        <td>{{ row.stats.strikes }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-light);">No pitching stats yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Schedule -->
+<div id="team-schedule" class="tab-content" data-group="team">
+    <div class="card">
+        <h2>Schedule & Results</h2>
+        {% if schedule %}
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th></th>
+                        <th style="text-align: left;">Opponent</th>
+                        <th>Result</th>
+                        <th>Score</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in schedule %}
+                    <tr>
+                        <td style="text-align: left;">{{ row.game.date }}</td>
+                        <td style="text-align: center;">{{ row.home_away }}</td>
+                        <td style="text-align: left;">
+                            <a href="{{ url_for('main.team_detail', team_id=row.opponent.id) }}" class="team-link">{{ row.opponent.name }}</a>
+                        </td>
+                        <td>
+                            {% if row.result == 'W' %}<span class="badge win">W</span>
+                            {% elif row.result == 'L' %}<span class="badge loss">L</span>
+                            {% elif row.result == 'T' %}<span class="badge tie">T</span>
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>{{ row.score }}</td>
+                        <td><a href="{{ url_for('main.game_detail', game_id=row.game.id) }}" class="player-link">Box Score</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: var(--text-light);">No games scheduled yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

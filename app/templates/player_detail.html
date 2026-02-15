@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}{{ player.name }}{% endblock %}
+{% block content %}
+<h1>#{{ player.uniform_number }} {{ player.name }}</h1>
+<p style="margin-bottom: 1rem;">
+    <a href="{{ url_for('main.team_detail', team_id=player.team.id) }}" class="player-link">&larr; {{ player.team.name }}</a>
+    {% if player.bats or player.throws %}
+    &nbsp;&mdash;&nbsp; B/T: {{ player.bats }}/{{ player.throws }}
+    {% endif %}
+    {% if player.player_class %}
+    &nbsp;&mdash;&nbsp; Class: {{ player.player_class }}
+    {% endif %}
+</p>
+
+<div class="stats-grid">
+    {% if batting %}
+    <div class="card">
+        <h2>Season Batting</h2>
+        <div class="table-responsive">
+            <table>
+                <tr><th style="text-align:left">Stat</th><th>Value</th></tr>
+                <tr><td style="text-align:left">GP</td><td>{{ batting.gp }}</td></tr>
+                <tr><td style="text-align:left">AB</td><td>{{ batting.ab }}</td></tr>
+                <tr><td style="text-align:left">R</td><td>{{ batting.r }}</td></tr>
+                <tr><td style="text-align:left">H</td><td>{{ batting.h }}</td></tr>
+                <tr><td style="text-align:left">2B</td><td>{{ batting.doubles }}</td></tr>
+                <tr><td style="text-align:left">3B</td><td>{{ batting.triples }}</td></tr>
+                <tr><td style="text-align:left">HR</td><td>{{ batting.hr }}</td></tr>
+                <tr><td style="text-align:left">RBI</td><td>{{ batting.rbi }}</td></tr>
+                <tr><td style="text-align:left">BB</td><td>{{ batting.bb }}</td></tr>
+                <tr><td style="text-align:left">SO</td><td>{{ batting.so }}</td></tr>
+                <tr><td style="text-align:left">SB</td><td>{{ batting.sb }}</td></tr>
+                <tr><td style="text-align:left">CS</td><td>{{ batting.cs }}</td></tr>
+                <tr><td style="text-align:left">HBP</td><td>{{ batting.hbp }}</td></tr>
+                <tr><td style="text-align:left">SH</td><td>{{ batting.sh }}</td></tr>
+                <tr><td style="text-align:left">SF</td><td>{{ batting.sf }}</td></tr>
+                <tr><td style="text-align:left">AVG</td><td><strong>{{ batting.avg }}</strong></td></tr>
+                <tr><td style="text-align:left">OBP</td><td><strong>{{ batting.obp }}</strong></td></tr>
+                <tr><td style="text-align:left">SLG</td><td><strong>{{ batting.slg }}</strong></td></tr>
+                <tr><td style="text-align:left">OPS</td><td><strong>{{ batting.ops }}</strong></td></tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pitching %}
+    <div class="card">
+        <h2>Season Pitching</h2>
+        <div class="table-responsive">
+            <table>
+                <tr><th style="text-align:left">Stat</th><th>Value</th></tr>
+                <tr><td style="text-align:left">GP</td><td>{{ pitching.gp }}</td></tr>
+                <tr><td style="text-align:left">GS</td><td>{{ pitching.gs }}</td></tr>
+                <tr><td style="text-align:left">W-L</td><td>{{ pitching.w }}-{{ pitching.l }}</td></tr>
+                <tr><td style="text-align:left">SV</td><td>{{ pitching.sv }}</td></tr>
+                <tr><td style="text-align:left">IP</td><td>{{ pitching.ip }}</td></tr>
+                <tr><td style="text-align:left">H</td><td>{{ pitching.h }}</td></tr>
+                <tr><td style="text-align:left">R</td><td>{{ pitching.r }}</td></tr>
+                <tr><td style="text-align:left">ER</td><td>{{ pitching.er }}</td></tr>
+                <tr><td style="text-align:left">BB</td><td>{{ pitching.bb }}</td></tr>
+                <tr><td style="text-align:left">SO</td><td>{{ pitching.so }}</td></tr>
+                <tr><td style="text-align:left">HR</td><td>{{ pitching.hr }}</td></tr>
+                <tr><td style="text-align:left">HBP</td><td>{{ pitching.hbp }}</td></tr>
+                <tr><td style="text-align:left">WP</td><td>{{ pitching.wp }}</td></tr>
+                <tr><td style="text-align:left">BK</td><td>{{ pitching.bk }}</td></tr>
+                <tr><td style="text-align:left">ERA</td><td><strong>{{ pitching.era }}</strong></td></tr>
+                <tr><td style="text-align:left">WHIP</td><td><strong>{{ pitching.whip }}</strong></td></tr>
+                <tr><td style="text-align:left">CG</td><td>{{ pitching.cg }}</td></tr>
+                <tr><td style="text-align:left">SHO</td><td>{{ pitching.sho }}</td></tr>
+                <tr><td style="text-align:left">Pitches</td><td>{{ pitching.pitches }}</td></tr>
+                <tr><td style="text-align:left">Strikes</td><td>{{ pitching.strikes }}</td></tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if fielding %}
+    <div class="card">
+        <h2>Season Fielding</h2>
+        <div class="table-responsive">
+            <table>
+                <tr><th style="text-align:left">Stat</th><th>Value</th></tr>
+                <tr><td style="text-align:left">GP</td><td>{{ fielding.gp }}</td></tr>
+                <tr><td style="text-align:left">PO</td><td>{{ fielding.po }}</td></tr>
+                <tr><td style="text-align:left">A</td><td>{{ fielding.a }}</td></tr>
+                <tr><td style="text-align:left">E</td><td>{{ fielding.e }}</td></tr>
+                <tr><td style="text-align:left">TC</td><td>{{ fielding.tc }}</td></tr>
+                <tr><td style="text-align:left">FPCT</td><td><strong>{{ fielding.fpct }}</strong></td></tr>
+                <tr><td style="text-align:left">PB</td><td>{{ fielding.pb }}</td></tr>
+                <tr><td style="text-align:left">SBA</td><td>{{ fielding.sba }}</td></tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Game Log -->
+{% if game_log %}
+<div class="card">
+    <h2>Game Log</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th style="text-align: left;">Opponent</th>
+                    <th>AB</th>
+                    <th>R</th>
+                    <th>H</th>
+                    <th>RBI</th>
+                    <th>2B</th>
+                    <th>3B</th>
+                    <th>HR</th>
+                    <th>BB</th>
+                    <th>SO</th>
+                    <th>SB</th>
+                    {% if pitching %}
+                    <th>IP</th>
+                    <th>PH</th>
+                    <th>PR</th>
+                    <th>PER</th>
+                    <th>PBB</th>
+                    <th>PSO</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in game_log %}
+                <tr>
+                    <td style="text-align: left;">
+                        <a href="{{ url_for('main.game_detail', game_id=entry.game.id) }}" class="player-link">{{ entry.game.date }}</a>
+                    </td>
+                    <td style="text-align: left;">
+                        {% if entry.game.home_team_id == player.team_id %}
+                            vs {{ entry.game.visitor_team.name }}
+                        {% else %}
+                            @ {{ entry.game.home_team.name }}
+                        {% endif %}
+                    </td>
+                    {% if entry.batting %}
+                    <td>{{ entry.batting.ab }}</td>
+                    <td>{{ entry.batting.r }}</td>
+                    <td>{{ entry.batting.h }}</td>
+                    <td>{{ entry.batting.rbi }}</td>
+                    <td>{{ entry.batting.doubles }}</td>
+                    <td>{{ entry.batting.triples }}</td>
+                    <td>{{ entry.batting.hr }}</td>
+                    <td>{{ entry.batting.bb }}</td>
+                    <td>{{ entry.batting.so }}</td>
+                    <td>{{ entry.batting.sb }}</td>
+                    {% else %}
+                    <td colspan="10">-</td>
+                    {% endif %}
+                    {% if pitching %}
+                        {% if entry.pitching %}
+                        <td>{{ entry.pitching.ip }}</td>
+                        <td>{{ entry.pitching.h }}</td>
+                        <td>{{ entry.pitching.r }}</td>
+                        <td>{{ entry.pitching.er }}</td>
+                        <td>{{ entry.pitching.bb }}</td>
+                        <td>{{ entry.pitching.so }}</td>
+                        {% else %}
+                        <td colspan="6">-</td>
+                        {% endif %}
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

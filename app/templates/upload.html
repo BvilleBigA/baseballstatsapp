@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Upload Game{% endblock %}
+{% block content %}
+<h1>Upload Game XML</h1>
+<div class="card" style="max-width: 600px;">
+    {% if not leagues %}
+    <p>No leagues exist yet. <a href="{{ url_for('main.league_new') }}" class="player-link">Create a league first</a>.</p>
+    {% else %}
+    <form method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="league_id">League</label>
+            <select id="league_id" name="league_id" required>
+                <option value="">-- Select League --</option>
+                {% for league in leagues %}
+                <option value="{{ league.id }}">{{ league.name }} ({{ league.season }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="xmlfiles">Game XML File(s)</label>
+            <input type="file" id="xmlfiles" name="xmlfiles" accept=".xml,.txt" multiple required>
+            <small style="color: var(--text-light);">Select one or more PrestoSports XML game files (.xml or .txt)</small>
+        </div>
+        <button type="submit" class="btn accent">Import Game(s)</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
