@@ -1,15 +1,16 @@
 from app import db
 
 
-class League(db.Model):
+class Season(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
-    sport = db.Column(db.String(20), default="softball")  # baseball or softball
-    season = db.Column(db.String(20))  # e.g. "2025"
-    teams = db.relationship("Team", backref="league", lazy=True)
+    play_entry_mode = db.Column(db.String(40), default="box_game_totals")  # box_game_totals, box_inning_by_inning, pbp_simple
+    rules = db.Column(db.String(30), default="rules_hs_sb")  # rules_hs_ba, rules_hs_sb, rules_ncaa_ba, rules_ncaa_sb, rules_mlb
+    gender = db.Column(db.String(20), default="female")  # male, female, coed
+    teams = db.relationship("Team", backref="season", lazy=True)
 
     def __repr__(self):
-        return f"<League {self.name} ({self.season})>"
+        return f"<Season {self.name}>"
 
 
 class Team(db.Model):
@@ -17,10 +18,20 @@ class Team(db.Model):
     code = db.Column(db.String(50), nullable=False)
     team_id = db.Column(db.String(50))  # external ID like "STATS1"
     name = db.Column(db.String(200), nullable=False)
-    league_id = db.Column(db.Integer, db.ForeignKey("league.id"))
+    season_id = db.Column(db.Integer, db.ForeignKey("season.id"))
+    stadium = db.Column(db.String(200), default="")
+    city = db.Column(db.String(100), default="")
+    state = db.Column(db.String(50), default="")
+    mascot = db.Column(db.String(100), default="")
+    print_name = db.Column(db.String(200), default="")
+    abbreviation = db.Column(db.String(20), default="")
+    league = db.Column(db.String(100), default="")
+    division = db.Column(db.String(100), default="")
+    coach = db.Column(db.String(200), default="")
+    conference = db.Column(db.String(100), default="")
     players = db.relationship("Player", backref="team", lazy=True)
 
-    __table_args__ = (db.UniqueConstraint("code", "league_id", name="uq_team_code_league"),)
+    __table_args__ = (db.UniqueConstraint("code", "season_id", name="uq_team_code_season"),)
 
     def __repr__(self):
         return f"<Team {self.name}>"

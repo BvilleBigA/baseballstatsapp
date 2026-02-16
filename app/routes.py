@@ -1,14 +1,11 @@
 """Flask routes for the baseball stats app."""
 
-import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from sqlalchemy import func
 from app import db
 from app.models import (
-    League, Team, Player, Game,
+    Season, Team, Player, Game,
     BattingStats, PitchingStats, FieldingStats, Play, InningScore,
 )
-from app.xml_parser import parse_game_xml
 
 main_bp = Blueprint("main", __name__)
 api_bp = Blueprint("api", __name__)
@@ -128,65 +125,14 @@ def _aggregate_fielding(stats_list):
 
 @main_bp.route("/")
 def index():
-    leagues = League.query.all()
-    if len(leagues) == 1:
-        return redirect(url_for("main.league_detail", league_id=leagues[0].id))
-    return render_template("index.html", leagues=leagues)
+    seasons = Season.query.all()
+    return render_template("index.html", seasons=seasons)
 
 
-@main_bp.route("/league/new", methods=["GET", "POST"])
-def league_new():
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        sport = request.form.get("sport", "softball")
-        season = request.form.get("season", "").strip()
-        if not name:
-            flash("League name is required.", "error")
-            return render_template("league_new.html")
-        league = League(name=name, sport=sport, season=season)
-        db.session.add(league)
-        db.session.commit()
-        flash(f"League '{name}' created.", "success")
-        return redirect(url_for("main.league_detail", league_id=league.id))
-    return render_template("league_new.html")
-
-
-@main_bp.route("/league/<int:league_id>")
-def league_detail(league_id):
-    league = League.query.get_or_404(league_id)
-    teams = Team.query.filter_by(league_id=league.id).all()
-
-    # Build standings
-    standings = []
-    for team in teams:
-        wins = Game.query.filter(
-            ((Game.home_team_id == team.id) & (Game.home_runs > Game.visitor_runs)) |
-            ((Game.visitor_team_id == team.id) & (Game.visitor_runs > Game.home_runs))
-        ).filter(Game.is_complete == True).count()  # noqa: E712
-
-        losses = Game.query.filter(
-            ((Game.home_team_id == team.id) & (Game.home_runs < Game.visitor_runs)) |
-            ((Game.visitor_team_id == team.id) & (Game.visitor_runs < Game.home_runs))
-        ).filter(Game.is_complete == True).count()  # noqa: E712
-
-        pct = wins / (wins + losses) if (wins + losses) > 0 else 0.0
-
-        # Runs scored / allowed
-        home_games = Game.query.filter_by(home_team_id=team.id, is_complete=True).all()
-        away_games = Game.query.filter_by(visitor_team_id=team.id, is_complete=True).all()
-        rs = sum(g.home_runs for g in home_games) + sum(g.visitor_runs for g in away_games)
-        ra = sum(g.visitor_runs for g in home_games) + sum(g.home_runs for g in away_games)
-
-        standings.append({
-            "team": team,
-            "w": wins,
-            "l": losses,
-            "pct": f"{pct:.3f}",
-            "rs": rs,
-            "ra": ra,
-        })
-
-    standings.sort(key=lambda x: (-float(x["pct"]), x["team"].name))
+@main_bp.route("/season/<int:season_id>")
+def season_detail(season_id):
+    season = Season.query.get_or_404(season_id)
+    teams = Team.query.filter_by(season_id=season.id).all()
 
     # Recent games
     games = Game.query.filter(
@@ -194,7 +140,119 @@ def league_detail(league_id):
         (Game.visitor_team_id.in_([t.id for t in teams]))
     ).order_by(Game.date.desc()).limit(20).all()
 
-    return render_template("league_detail.html", league=league, standings=standings, games=games)
+    return render_template("season_detail.html", season=season, teams=teams, games=games)
+
+
+# ── Configure (System Preferences) ───────────────────────────────────────────
+
+
+@main_bp.route("/configure")
+def configure():
+    seasons = Season.query.all()
+    return render_template("system_preferences.html", seasons=seasons)
+
+
+@main_bp.route("/configure/season", methods=["POST"])
+def configure_season_create():
+    name = request.form.get("name", "").strip()
+    play_entry_mode = request.form.get("play_entry_mode", "basic")
+    rules = request.form.get("rules", "softball")
+    gender = request.form.get("gender", "female")
+    if not name:
+        flash("Season name is required.", "error")
+        return redirect(url_for("main.configure"))
+    season = Season(name=name, play_entry_mode=play_entry_mode, rules=rules, gender=gender)
+    db.session.add(season)
+    db.session.commit()
+    flash(f"Season '{name}' created.", "success")
+    return redirect(url_for("main.configure"))
+
+
+@main_bp.route("/configure/season/<int:season_id>/edit", methods=["POST"])
+def configure_season_edit(season_id):
+    season = Season.query.get_or_404(season_id)
+    season.name = request.form.get("name", season.name).strip()
+    season.play_entry_mode = request.form.get("play_entry_mode", season.play_entry_mode)
+    season.rules = request.form.get("rules", season.rules)
+    season.gender = request.form.get("gender", season.gender)
+    db.session.commit()
+    flash(f"Season '{season.name}' updated.", "success")
+    return redirect(url_for("main.configure"))
+
+
+@main_bp.route("/configure/season/<int:season_id>/delete", methods=["POST"])
+def configure_season_delete(season_id):
+    season = Season.query.get_or_404(season_id)
+    # Delete all teams and their players in this season
+    for team in season.teams:
+        Player.query.filter_by(team_id=team.id).delete()
+        db.session.delete(team)
+    db.session.delete(season)
+    db.session.commit()
+    flash("Season deleted.", "success")
+    return redirect(url_for("main.configure"))
+
+
+@main_bp.route("/configure/season/<int:season_id>/team", methods=["POST"])
+def configure_team_create(season_id):
+    season = Season.query.get_or_404(season_id)
+    name = request.form.get("name", "").strip()
+    code = request.form.get("code", "").strip()
+    if not name:
+        flash("Team name is required.", "error")
+        return redirect(url_for("main.index"))
+    if not code:
+        code = name[:4].upper()
+    team = Team(
+        name=name, code=code, season_id=season.id,
+        stadium=request.form.get("stadium", "").strip(),
+        city=request.form.get("city", "").strip(),
+        state=request.form.get("state", "").strip(),
+        mascot=request.form.get("mascot", "").strip(),
+        print_name=request.form.get("print_name", "").strip(),
+        abbreviation=request.form.get("abbreviation", "").strip(),
+        league=request.form.get("league", "").strip(),
+        division=request.form.get("division", "").strip(),
+        coach=request.form.get("coach", "").strip(),
+        conference=request.form.get("conference", "").strip(),
+    )
+    db.session.add(team)
+    db.session.commit()
+    flash(f"Team '{name}' added to {season.name}.", "success")
+    return redirect(url_for("main.index"))
+
+
+@main_bp.route("/configure/team/<int:team_id>/edit", methods=["POST"])
+def configure_team_edit(team_id):
+    team = Team.query.get_or_404(team_id)
+    team.name = request.form.get("name", team.name).strip()
+    team.code = request.form.get("code", team.code).strip()
+    team.stadium = request.form.get("stadium", team.stadium or "").strip()
+    team.city = request.form.get("city", team.city or "").strip()
+    team.state = request.form.get("state", team.state or "").strip()
+    team.mascot = request.form.get("mascot", team.mascot or "").strip()
+    team.print_name = request.form.get("print_name", team.print_name or "").strip()
+    team.abbreviation = request.form.get("abbreviation", team.abbreviation or "").strip()
+    team.league = request.form.get("league", team.league or "").strip()
+    team.division = request.form.get("division", team.division or "").strip()
+    team.coach = request.form.get("coach", team.coach or "").strip()
+    team.conference = request.form.get("conference", team.conference or "").strip()
+    db.session.commit()
+    flash(f"Team '{team.name}' updated.", "success")
+    return redirect(url_for("main.index"))
+
+
+@main_bp.route("/configure/team/<int:team_id>/delete", methods=["POST"])
+def configure_team_delete(team_id):
+    team = Team.query.get_or_404(team_id)
+    Player.query.filter_by(team_id=team.id).delete()
+    db.session.delete(team)
+    db.session.commit()
+    flash("Team deleted.", "success")
+    return redirect(url_for("main.configure"))
+
+
+# ── Team / Player / Game detail routes ────────────────────────────────────────
 
 
 @main_bp.route("/team/<int:team_id>")
@@ -309,56 +367,60 @@ def game_detail(game_id):
                            plays=plays)
 
 
-@main_bp.route("/upload", methods=["GET", "POST"])
-def upload():
-    leagues = League.query.all()
-    if request.method == "POST":
-        league_id = request.form.get("league_id")
-        if not league_id:
-            flash("Please select a league.", "error")
-            return render_template("upload.html", leagues=leagues)
-
-        league = League.query.get(league_id)
-        if not league:
-            flash("League not found.", "error")
-            return render_template("upload.html", leagues=leagues)
-
-        files = request.files.getlist("xmlfiles")
-        if not files or all(f.filename == "" for f in files):
-            flash("Please select at least one XML file.", "error")
-            return render_template("upload.html", leagues=leagues)
-
-        imported = 0
-        errors = []
-        for f in files:
-            if f.filename == "":
-                continue
-            try:
-                content = f.read()
-                game = parse_game_xml(content, league)
-                if game:
-                    imported += 1
-            except Exception as e:
-                errors.append(f"{f.filename}: {str(e)}")
-
-        if imported:
-            flash(f"Successfully imported {imported} game(s).", "success")
-        if errors:
-            for err in errors:
-                flash(f"Error: {err}", "error")
-
-        return redirect(url_for("main.league_detail", league_id=league.id))
-
-    return render_template("upload.html", leagues=leagues)
-
-
 # ── API routes ────────────────────────────────────────────────────────────────
 
 
-@api_bp.route("/leagues")
-def api_leagues():
-    leagues = League.query.all()
-    return jsonify([{"id": l.id, "name": l.name, "sport": l.sport, "season": l.season} for l in leagues])
+@api_bp.route("/seasons")
+def api_seasons():
+    seasons = Season.query.all()
+    return jsonify([{"id": s.id, "name": s.name, "rules": s.rules, "gender": s.gender, "play_entry_mode": s.play_entry_mode} for s in seasons])
+
+
+@api_bp.route("/seasons/<int:season_id>/teams")
+def api_season_teams(season_id):
+    teams = Team.query.filter_by(season_id=season_id).order_by(Team.name).all()
+    return jsonify([{
+        "id": t.id, "name": t.name, "code": t.code,
+        "stadium": t.stadium or "", "city": t.city or "", "state": t.state or "",
+        "mascot": t.mascot or "", "print_name": t.print_name or "",
+        "abbreviation": t.abbreviation or "", "league": t.league or "",
+        "division": t.division or "", "coach": t.coach or "", "conference": t.conference or "",
+    } for t in teams])
+
+
+@api_bp.route("/seasons/<int:season_id>/games")
+def api_season_games(season_id):
+    teams = Team.query.filter_by(season_id=season_id).all()
+    team_ids = [t.id for t in teams]
+    if not team_ids:
+        return jsonify([])
+    games = Game.query.filter(
+        (Game.home_team_id.in_(team_ids)) | (Game.visitor_team_id.in_(team_ids))
+    ).order_by(Game.date).all()
+    results = []
+    for g in games:
+        results.append({
+            "id": g.id,
+            "date": g.date or "",
+            "visitor": g.visitor_team.name if g.visitor_team else "",
+            "home": g.home_team.name if g.home_team else "",
+            "score": f"{g.visitor_runs}-{g.home_runs}" if g.is_complete else "",
+            "is_complete": g.is_complete,
+        })
+    return jsonify(results)
+
+
+@api_bp.route("/teams/<int:team_id>/players")
+def api_team_players(team_id):
+    players = Player.query.filter_by(team_id=team_id).order_by(Player.uniform_number).all()
+    return jsonify([{
+        "id": p.id,
+        "name": p.name,
+        "uniform_number": p.uniform_number or "",
+        "bats": p.bats or "",
+        "throws": p.throws or "",
+        "player_class": p.player_class or "",
+    } for p in players])
 
 
 @api_bp.route("/teams/<int:team_id>/batting")

@@ -258,10 +258,14 @@
 </head>
 <body>
     <nav>
-        <a href="/" class="brand">Baseball Stats</a>
         <div class="nav-links">
-            <a href="/">Home</a>
-            <a href="{{ url_for('main.upload') }}">Upload Game</a>
+            <a href="/">File</a>
+            <a href="/" onclick="event.preventDefault(); if(typeof showSystemPrefs==='function'){showSystemPrefs();}else{window.location='/';}">Configure</a>
+            <a href="#">Edit</a>
+            <a href="#">Game Control</a>
+            <a href="#">View</a>
+            <a href="#">Webcast</a>
+            <a href="#">Help</a>
         </div>
     </nav>
 

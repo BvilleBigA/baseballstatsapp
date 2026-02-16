@@ -1,26 +1,734 @@
 {% extends "base.html" %}
-{% block title %}Baseball Stats - Home{% endblock %}
+{% block title %}Baseball Stats{% endblock %}
 {% block content %}
-<h1>Leagues</h1>
 
-{% if leagues %}
-<div class="stats-grid">
-    {% for league in leagues %}
-    <div class="card">
-        <h2><a href="{{ url_for('main.league_detail', league_id=league.id) }}" class="team-link">{{ league.name }}</a></h2>
-        <p>{{ league.sport | capitalize }} &mdash; {{ league.season }}</p>
-        <p style="color: var(--text-light); font-size: 0.85rem;">{{ league.teams | length }} team(s)</p>
+<div style="display: grid; grid-template-columns: auto auto auto; gap: 0.5rem 0.5rem; align-items: center; justify-content: start; margin-bottom: 1.5rem;">
+    <label for="season-select" style="font-weight: 600; font-size: 0.95rem; text-align: right;">Season:</label>
+    <select id="season-select" style="width: 300px; height: 36px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;" onchange="onSeasonChange(this.value)">
+        {% if not seasons %}
+        <option value="">No seasons available</option>
+        {% else %}
+        <option value="" disabled selected>Select a season...</option>
+        {% for season in seasons %}
+        <option value="{{ season.id }}">{{ season.name }}</option>
+        {% endfor %}
+        {% endif %}
+    </select>
+    <button class="btn" style="height: 36px; line-height: 36px; padding: 0 1.25rem; box-sizing: border-box;" onclick="showSystemPrefs()">Configure</button>
+
+    <label for="team-select" style="font-weight: 600; font-size: 0.95rem; text-align: right;">Team:</label>
+    <select id="team-select" style="width: 300px; height: 36px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;" disabled onchange="onTeamChange(this.value)">
+        <option value="">Select a season first...</option>
+    </select>
+    <button class="btn" style="height: 36px; line-height: 36px; padding: 0 1.25rem; box-sizing: border-box;" onclick="showTeamConfigure()" id="btn-team-configure" disabled>Configure</button>
+</div>
+
+<!-- Roster & Schedule Section -->
+<div style="display: flex; gap: 1.25rem;">
+    <!-- Left Column: Roster -->
+    <div class="card" style="flex: 1;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h2 style="margin-bottom: 0;">Roster:</h2>
+            <span id="roster-count" style="color: var(--text-light); font-size: 0.9rem;">(0 Players)</span>
+        </div>
+        <div id="roster-list">
+            <p style="color: var(--text-light); font-size: 0.9rem;">Select a team to view roster.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button class="btn" onclick="showRosterConfigure()" id="btn-roster-configure" disabled>Configure</button>
+            <button class="btn accent" id="btn-download-roster" disabled>Download Roster</button>
+        </div>
     </div>
-    {% endfor %}
-</div>
-{% else %}
-<div class="card">
-    <p>No leagues yet. Create one to get started.</p>
-</div>
-{% endif %}
 
-<div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
-    <a href="{{ url_for('main.league_new') }}" class="btn">Create League</a>
-    <a href="{{ url_for('main.upload') }}" class="btn accent">Upload Game XML</a>
+    <!-- Right Column: Schedule -->
+    <div class="card" style="flex: 1;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h2 style="margin-bottom: 0;">Schedule:</h2>
+            <span id="schedule-count" style="color: var(--text-light); font-size: 0.9rem;">(0 Competitions)</span>
+        </div>
+        <div id="schedule-list">
+            <p style="color: var(--text-light); font-size: 0.9rem;">Select a season to view schedule.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button class="btn" id="btn-schedule-open" disabled>Open</button>
+            <button class="btn" id="btn-schedule-configure" disabled>Configure</button>
+            <button class="btn accent" id="btn-schedule-add" disabled>Add New</button>
+        </div>
+    </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- System Preferences Modal -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div id="sysprefs-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box modal-box-lg">
+        <h2>System Preferences</h2>
+
+        <div class="section-tabs" data-group="prefs">
+            <button class="active" data-tab="seasons" onclick="showTab('prefs', 'seasons')">Seasons</button>
+            <button data-tab="tournaments" onclick="showTab('prefs', 'tournaments')">Tournaments</button>
+            <button data-tab="utilities" onclick="showTab('prefs', 'utilities')">Utilities</button>
+        </div>
+
+        <!-- Seasons Tab -->
+        <div id="prefs-seasons" class="tab-content active" data-group="prefs">
+            <div style="display: flex; gap: 1.25rem; min-height: 250px;">
+                <div style="flex: 1; border-right: 1px solid var(--border); padding-right: 1.25rem;">
+                    <h3 style="margin-bottom: 0.75rem;">Seasons</h3>
+                    <div id="season-list" style="display: flex; flex-direction: column; gap: 2px;">
+                        {% if seasons %}
+                            {% for season in seasons %}
+                            <div class="season-item {% if loop.first %}selected{% endif %}"
+                                 data-season-id="{{ season.id }}"
+                                 onclick="selectSeason(this, {{ season.id }})">
+                                <div style="font-weight: 600;">{{ season.name }}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-light);">{{ season.rules | replace('_', ' ') | upper }} &mdash; {{ season.gender | capitalize }}</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p style="color: var(--text-light); font-size: 0.9rem;">No seasons yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; padding-top: 2rem; min-width: 100px;">
+                    <button class="btn" onclick="showAddSeason()">Add</button>
+                    <button class="btn" onclick="showEditSeason()" id="btn-edit-season" {% if not seasons %}disabled{% endif %}>Edit</button>
+                    <button class="btn" style="background: var(--error);" onclick="deleteSeason()" id="btn-delete-season" {% if not seasons %}disabled{% endif %}>Delete</button>
+                </div>
+            </div>
+            {% for season in seasons %}
+            <form id="delete-season-{{ season.id }}" method="post" action="{{ url_for('main.configure_season_delete', season_id=season.id) }}" style="display: none;"></form>
+            {% endfor %}
+        </div>
+
+        <!-- Tournaments Tab -->
+        <div id="prefs-tournaments" class="tab-content" data-group="prefs">
+            <p style="color: var(--text-light);">Tournament configuration coming soon.</p>
+        </div>
+
+        <!-- Utilities Tab -->
+        <div id="prefs-utilities" class="tab-content" data-group="prefs">
+            <p style="color: var(--text-light);">Database utilities coming soon.</p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+            <button class="btn" onclick="hideSystemPrefs()">OK</button>
+            <button class="btn" style="background: var(--text-light);" onclick="hideSystemPrefs()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- New Season Modal -->
+<div id="add-season-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+        <h2>New Season</h2>
+        <form method="post" action="{{ url_for('main.configure_season_create') }}">
+            <div class="form-group">
+                <label for="season-name">Season Title:</label>
+                <input type="text" id="season-name" name="name" required placeholder="e.g. Spring 2025 Softball">
+            </div>
+            <div class="form-group">
+                <label for="season-play-entry">Default Play Entry Mode:</label>
+                <select id="season-play-entry" name="play_entry_mode" required>
+                    <option value="" disabled selected></option>
+                    <option value="box_game_totals">Box Score: Game Totals</option>
+                    <option value="box_inning_by_inning">Box Score: Inning by Inning</option>
+                    <option value="pbp_simple">Play-by-Play: Simple Mode</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="season-rules">Rules:</label>
+                <select id="season-rules" name="rules" required>
+                    <option value="" disabled selected></option>
+                    <option value="rules_hs_ba">High School Baseball</option>
+                    <option value="rules_hs_sb">High School Softball</option>
+                    <option value="rules_ncaa_ba">NCAA Baseball</option>
+                    <option value="rules_ncaa_sb">NCAA Softball</option>
+                    <option value="rules_mlb">Major League Baseball</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="season-gender">Default Gender:</label>
+                <select id="season-gender" name="gender" required>
+                    <option value="" disabled selected></option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="submit" class="btn">OK</button>
+                <button type="button" class="btn" style="background: var(--text-light);" onclick="hideSubModals()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Season Modals -->
+{% for season in seasons %}
+<div id="edit-season-modal-{{ season.id }}" class="modal-overlay edit-season-modal" style="display: none;">
+    <div class="modal-box">
+        <h2>Edit Season</h2>
+        <form method="post" action="{{ url_for('main.configure_season_edit', season_id=season.id) }}">
+            <div class="form-group">
+                <label>Season Title:</label>
+                <input type="text" name="name" value="{{ season.name }}" required>
+            </div>
+            <div class="form-group">
+                <label>Default Play Entry Mode:</label>
+                <select name="play_entry_mode">
+                    <option value="box_game_totals" {{ 'selected' if season.play_entry_mode == 'box_game_totals' }}>Box Score: Game Totals</option>
+                    <option value="box_inning_by_inning" {{ 'selected' if season.play_entry_mode == 'box_inning_by_inning' }}>Box Score: Inning by Inning</option>
+                    <option value="pbp_simple" {{ 'selected' if season.play_entry_mode == 'pbp_simple' }}>Play-by-Play: Simple Mode</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Rules:</label>
+                <select name="rules">
+                    <option value="rules_hs_ba" {{ 'selected' if season.rules == 'rules_hs_ba' }}>High School Baseball</option>
+                    <option value="rules_hs_sb" {{ 'selected' if season.rules == 'rules_hs_sb' }}>High School Softball</option>
+                    <option value="rules_ncaa_ba" {{ 'selected' if season.rules == 'rules_ncaa_ba' }}>NCAA Baseball</option>
+                    <option value="rules_ncaa_sb" {{ 'selected' if season.rules == 'rules_ncaa_sb' }}>NCAA Softball</option>
+                    <option value="rules_mlb" {{ 'selected' if season.rules == 'rules_mlb' }}>Major League Baseball</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Default Gender:</label>
+                <select name="gender">
+                    <option value="male" {{ 'selected' if season.gender == 'male' }}>Male</option>
+                    <option value="female" {{ 'selected' if season.gender == 'female' }}>Female</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="submit" class="btn accent">Save</button>
+                <button type="button" class="btn" style="background: var(--text-light);" onclick="hideSubModals()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Team Configure Modal -->
+<div id="team-configure-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="width: 850px;">
+        <h2>Team Configuration</h2>
+        <div style="display: flex; gap: 1.25rem;">
+            <!-- Left Column: Season dropdown + team list -->
+            <div style="width: 50%; border-right: 1px solid var(--border); padding-right: 1.25rem;">
+                <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">First Select Season then choose the team:</label>
+                <select id="team-cfg-season" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; margin-bottom: 0.75rem;" onchange="onTeamCfgSeasonChange(this.value)">
+                    {% for season in seasons %}
+                    <option value="{{ season.id }}">{{ season.name }}</option>
+                    {% endfor %}
+                </select>
+                <div id="team-cfg-list" style="display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto;">
+                    <p style="color: var(--text-light); font-size: 0.85rem;">Loading...</p>
+                </div>
+            </div>
+
+            <!-- Right Column: Team detail form -->
+            <div style="width: 50%;">
+                <form id="team-cfg-form" method="post" action="">
+                    <div class="form-group" style="margin-bottom: 0.6rem;">
+                        <label style="font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">Team Name (used to uniquely identify the team):</label>
+                        <input type="text" name="name" id="tcf-name" required style="width: 100%;">
+                    </div>
+                    <div class="tcf-row"><label class="tcf-label">Stadium:</label><input type="text" name="stadium" id="tcf-stadium" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">City:</label><input type="text" name="city" id="tcf-city" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">State:</label><input type="text" name="state" id="tcf-state" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">Mascot:</label><input type="text" name="mascot" id="tcf-mascot" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">Print Name:</label><input type="text" name="print_name" id="tcf-print-name" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">Abbreviation:</label><input type="text" name="abbreviation" id="tcf-abbreviation" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">League:</label><input type="text" name="league" id="tcf-league" class="tcf-input"><label class="tcf-label" style="min-width: auto; margin-left: 0.25rem;">Division:</label><input type="text" name="division" id="tcf-division" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">Coach:</label><input type="text" name="coach" id="tcf-coach" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">Conference:</label><input type="text" name="conference" id="tcf-conference" class="tcf-input"></div>
+                    <input type="hidden" name="code" id="tcf-code">
+                </form>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+            <button class="btn" onclick="teamCfgNew()">Add New</button>
+            <button class="btn" style="background: var(--error);" onclick="teamCfgDelete()">Delete</button>
+            <button class="btn" onclick="teamCfgSave()">Save</button>
+            <button class="btn" style="background: var(--text-light);" onclick="teamCfgCancel()">Cancel</button>
+            <button class="btn" style="background: var(--text-light);" onclick="hideTeamModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Roster Configure Modal -->
+<div id="roster-configure-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box">
+        <h2>Roster Configuration</h2>
+        <div id="roster-config-content"></div>
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+            <button class="btn" onclick="hideRosterModal()">OK</button>
+            <button class="btn" style="background: var(--text-light);" onclick="hideRosterModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-box {
+        background: var(--card-bg);
+        border-radius: 8px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+        padding: 1.5rem;
+        width: 420px;
+        max-width: 90vw;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    .modal-box-lg {
+        width: 700px;
+    }
+    .modal-box h2 { margin-bottom: 1rem; }
+    .modal-box .form-group { margin-bottom: 0.75rem; }
+    .season-item {
+        padding: 0.6rem 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .season-item:hover { background: #edf2f7; }
+    .season-item.selected { background: var(--primary); color: white; }
+    .season-item.selected div { color: white !important; }
+    .tcf-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.4rem;
+    }
+    .tcf-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        min-width: 95px;
+        text-align: right;
+    }
+    .tcf-input {
+        flex: 1;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 0.85rem;
+    }
+    .team-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.9rem;
+    }
+    .team-row:last-child { border-bottom: none; }
+</style>
+<script>
+var currentSeasonId = null;
+var currentTeamId = null;
+var teamsData = [];
+var selectedPrefSeasonId = {{ seasons[0].id if seasons else 'null' }};
+
+// ── Season / Team dropdowns ──────────────────────────────────────────
+
+function onSeasonChange(seasonId) {
+    currentSeasonId = seasonId;
+    currentTeamId = null;
+    var teamSelect = document.getElementById('team-select');
+    var btnTeamConfigure = document.getElementById('btn-team-configure');
+    var btnRosterConfigure = document.getElementById('btn-roster-configure');
+    var btnDownload = document.getElementById('btn-download-roster');
+
+    if (!seasonId) {
+        teamSelect.innerHTML = '<option value="">Select a season first...</option>';
+        teamSelect.disabled = true;
+        btnTeamConfigure.disabled = true;
+        return;
+    }
+
+    loadTeams(seasonId);
+    loadSchedule(seasonId);
+    btnTeamConfigure.disabled = false;
+    btnRosterConfigure.disabled = true;
+    btnDownload.disabled = true;
+    document.getElementById('btn-schedule-open').disabled = false;
+    document.getElementById('btn-schedule-configure').disabled = false;
+    document.getElementById('btn-schedule-add').disabled = false;
+    document.getElementById('roster-list').innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Select a team to view roster.</p>';
+    document.getElementById('roster-count').textContent = '(0 Players)';
+    document.getElementById('schedule-list').innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Select a season to view schedule.</p>';
+}
+
+function loadTeams(seasonId) {
+    var teamSelect = document.getElementById('team-select');
+    fetch('/api/seasons/' + seasonId + '/teams')
+        .then(function(r) { return r.json(); })
+        .then(function(teams) {
+            teamsData = teams;
+            teamSelect.innerHTML = '';
+            if (teams.length === 0) {
+                teamSelect.innerHTML = '<option value="">No teams available</option>';
+                teamSelect.disabled = true;
+            } else {
+                teamSelect.innerHTML = '<option value="" disabled selected>Select a team...</option>';
+                teams.forEach(function(t) {
+                    var opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.name;
+                    teamSelect.appendChild(opt);
+                });
+                teamSelect.disabled = false;
+            }
+        });
+}
+
+function onTeamChange(teamId) {
+    if (!teamId) return;
+    currentTeamId = teamId;
+    document.getElementById('btn-roster-configure').disabled = false;
+    document.getElementById('btn-download-roster').disabled = false;
+    document.getElementById('btn-schedule-open').disabled = false;
+    document.getElementById('btn-schedule-configure').disabled = false;
+    document.getElementById('btn-schedule-add').disabled = false;
+    loadRoster(teamId);
+}
+
+function loadRoster(teamId) {
+    var rosterList = document.getElementById('roster-list');
+    var rosterCount = document.getElementById('roster-count');
+    rosterList.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Loading...</p>';
+
+    fetch('/api/teams/' + teamId + '/players')
+        .then(function(r) { return r.json(); })
+        .then(function(players) {
+            rosterCount.textContent = '(' + players.length + ' Players)';
+            if (players.length === 0) {
+                rosterList.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">No players on this roster.</p>';
+                return;
+            }
+            var html = '<div class="table-responsive"><table>';
+            html += '<thead><tr><th style="width:15%">#</th><th style="width:45%">Name</th><th>B/T</th><th>Cl</th></tr></thead>';
+            html += '<tbody>';
+            players.forEach(function(p) {
+                html += '<tr>';
+                html += '<td>' + p.uniform_number + '</td>';
+                html += '<td><a href="/player/' + p.id + '" class="player-link">' + p.name + '</a></td>';
+                html += '<td>' + (p.bats && p.throws ? p.bats + '/' + p.throws : '') + '</td>';
+                html += '<td>' + p.player_class + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            rosterList.innerHTML = html;
+        });
+}
+
+function loadSchedule(seasonId) {
+    var scheduleList = document.getElementById('schedule-list');
+    var scheduleCount = document.getElementById('schedule-count');
+    scheduleList.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Loading...</p>';
+
+    fetch('/api/seasons/' + seasonId + '/games')
+        .then(function(r) { return r.json(); })
+        .then(function(games) {
+            scheduleCount.textContent = '(' + games.length + ' Competitions)';
+            if (games.length === 0) {
+                scheduleList.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">No games scheduled.</p>';
+                return;
+            }
+            var html = '<div class="table-responsive"><table>';
+            html += '<thead><tr><th>Date</th><th>Visitor</th><th></th><th>Home</th><th>Score</th></tr></thead>';
+            html += '<tbody>';
+            games.forEach(function(g) {
+                html += '<tr>';
+                html += '<td>' + g.date + '</td>';
+                html += '<td>' + g.visitor + '</td>';
+                html += '<td style="text-align:center;">@</td>';
+                html += '<td>' + g.home + '</td>';
+                html += '<td>' + (g.is_complete ? g.score : '--') + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            scheduleList.innerHTML = html;
+        });
+}
+
+// ── System Preferences modal ─────────────────────────────────────────
+
+function showSystemPrefs() {
+    document.getElementById('sysprefs-modal').style.display = '';
+}
+
+function hideSystemPrefs() {
+    document.getElementById('sysprefs-modal').style.display = 'none';
+    // Reload page to reflect any season changes
+    window.location.reload();
+}
+
+function selectSeason(el, id) {
+    document.querySelectorAll('.season-item').forEach(function(item) {
+        item.classList.remove('selected');
+    });
+    el.classList.add('selected');
+    selectedPrefSeasonId = id;
+}
+
+function showAddSeason() {
+    document.getElementById('add-season-modal').style.display = '';
+    document.getElementById('season-name').focus();
+}
+
+function showEditSeason() {
+    if (!selectedPrefSeasonId) return;
+    var modal = document.getElementById('edit-season-modal-' + selectedPrefSeasonId);
+    if (modal) modal.style.display = '';
+}
+
+function deleteSeason() {
+    if (!selectedPrefSeasonId) return;
+    if (confirm('Delete this season and all its teams?')) {
+        var form = document.getElementById('delete-season-' + selectedPrefSeasonId);
+        if (form) form.submit();
+    }
+}
+
+function hideSubModals() {
+    document.getElementById('add-season-modal').style.display = 'none';
+    document.querySelectorAll('.edit-season-modal').forEach(function(el) {
+        el.style.display = 'none';
+    });
+}
+
+// ── Team Configure modal ─────────────────────────────────────────────
+
+var teamCfgTeams = [];
+var teamCfgSelectedId = null;
+var teamCfgIsNew = false;
+var teamCfgSeasonId = null;
+
+function showTeamConfigure() {
+    document.getElementById('team-configure-modal').style.display = '';
+    var seasonSelect = document.getElementById('team-cfg-season');
+    if (currentSeasonId) {
+        seasonSelect.value = currentSeasonId;
+    }
+    teamCfgSeasonId = seasonSelect.value;
+    onTeamCfgSeasonChange(teamCfgSeasonId);
+}
+
+function onTeamCfgSeasonChange(seasonId) {
+    teamCfgSeasonId = seasonId;
+    teamCfgSelectedId = null;
+    teamCfgIsNew = false;
+    teamCfgClearForm();
+    fetch('/api/seasons/' + seasonId + '/teams')
+        .then(function(r) { return r.json(); })
+        .then(function(teams) {
+            teamCfgTeams = teams;
+            renderTeamCfgList();
+            if (teams.length > 0) {
+                teamCfgSelect(teams[0].id);
+            }
+        });
+}
+
+function renderTeamCfgList() {
+    var list = document.getElementById('team-cfg-list');
+    if (teamCfgTeams.length === 0) {
+        list.innerHTML = '<p style="color: var(--text-light); font-size: 0.85rem;">No teams yet.</p>';
+        return;
+    }
+    var html = '';
+    teamCfgTeams.forEach(function(t) {
+        var sel = t.id === teamCfgSelectedId ? ' selected' : '';
+        html += '<div class="season-item' + sel + '" onclick="teamCfgSelect(' + t.id + ')" style="padding: 0.4rem 0.6rem;">';
+        html += '<div style="font-weight: 600; font-size: 0.85rem;">' + t.name + '</div>';
+        html += '</div>';
+    });
+    list.innerHTML = html;
+}
+
+function teamCfgSelect(teamId) {
+    teamCfgSelectedId = teamId;
+    if (teamId !== '_new') teamCfgIsNew = false;
+    var team = teamCfgTeams.find(function(t) { return t.id === teamId; });
+    if (!team) return;
+    renderTeamCfgList();
+    document.getElementById('tcf-name').value = team.name;
+    document.getElementById('tcf-stadium').value = team.stadium;
+    document.getElementById('tcf-city').value = team.city;
+    document.getElementById('tcf-state').value = team.state;
+    document.getElementById('tcf-mascot').value = team.mascot;
+    document.getElementById('tcf-print-name').value = team.print_name;
+    document.getElementById('tcf-abbreviation').value = team.abbreviation;
+    document.getElementById('tcf-league').value = team.league;
+    document.getElementById('tcf-division').value = team.division;
+    document.getElementById('tcf-coach').value = team.coach;
+    document.getElementById('tcf-conference').value = team.conference;
+    document.getElementById('tcf-code').value = team.code;
+    document.getElementById('team-cfg-form').action = '/configure/team/' + teamId + '/edit';
+}
+
+function teamCfgNew() {
+    teamCfgIsNew = true;
+    teamCfgSelectedId = null;
+    teamCfgClearForm();
+    document.getElementById('tcf-name').value = 'New Team';
+    document.getElementById('tcf-code').value = 'NEWT';
+    // Remove any existing _new placeholder, then add fresh one
+    teamCfgTeams = teamCfgTeams.filter(function(t) { return t.id !== '_new'; });
+    teamCfgTeams.push({id: '_new', name: 'New Team', code: 'NEWT', stadium: '', city: '', state: '', mascot: '', print_name: '', abbreviation: '', league: '', division: '', coach: '', conference: ''});
+    teamCfgSelectedId = '_new';
+    renderTeamCfgList();
+    document.getElementById('team-cfg-form').action = '/configure/season/' + teamCfgSeasonId + '/team';
+    document.getElementById('tcf-name').focus();
+    document.getElementById('tcf-name').select();
+}
+
+function teamCfgClearForm() {
+    document.getElementById('tcf-name').value = '';
+    document.getElementById('tcf-stadium').value = '';
+    document.getElementById('tcf-city').value = '';
+    document.getElementById('tcf-state').value = '';
+    document.getElementById('tcf-mascot').value = '';
+    document.getElementById('tcf-print-name').value = '';
+    document.getElementById('tcf-abbreviation').value = '';
+    document.getElementById('tcf-league').value = '';
+    document.getElementById('tcf-division').value = '';
+    document.getElementById('tcf-coach').value = '';
+    document.getElementById('tcf-conference').value = '';
+    document.getElementById('tcf-code').value = '';
+}
+
+function teamCfgGetFormData() {
+    var name = document.getElementById('tcf-name').value.trim();
+    var abbr = document.getElementById('tcf-abbreviation').value.trim();
+    var code = abbr || name.substring(0, 4).toUpperCase();
+    document.getElementById('tcf-code').value = code;
+    var formData = new FormData(document.getElementById('team-cfg-form'));
+    return formData;
+}
+
+function teamCfgSave() {
+    var name = document.getElementById('tcf-name').value.trim();
+    if (!name) return;
+
+    var formData = teamCfgGetFormData();
+    var url;
+    if (teamCfgIsNew) {
+        url = '/configure/season/' + teamCfgSeasonId + '/team';
+    } else if (teamCfgSelectedId && teamCfgSelectedId !== '_new') {
+        url = '/configure/team/' + teamCfgSelectedId + '/edit';
+    } else {
+        return;
+    }
+
+    fetch(url, { method: 'POST', body: formData })
+        .then(function() {
+            // Reload team list from API
+            teamCfgIsNew = false;
+            return fetch('/api/seasons/' + teamCfgSeasonId + '/teams');
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(teams) {
+            teamCfgTeams = teams;
+            // Select the team we just saved (match by name)
+            var saved = teams.find(function(t) { return t.name === name; });
+            if (saved) {
+                teamCfgSelectedId = saved.id;
+                teamCfgSelect(saved.id);
+            } else {
+                renderTeamCfgList();
+            }
+        });
+}
+
+function teamCfgDelete() {
+    if (!teamCfgSelectedId) return;
+    var team = teamCfgTeams.find(function(t) { return t.id === teamCfgSelectedId; });
+    if (!team) return;
+    if (confirm('Delete team "' + team.name + '"?')) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/configure/team/' + teamCfgSelectedId + '/delete';
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function teamCfgCancel() {
+    // Revert form to currently selected team, or clear if new
+    if (teamCfgSelectedId) {
+        teamCfgSelect(teamCfgSelectedId);
+    } else {
+        teamCfgClearForm();
+    }
+}
+
+function hideTeamModal() {
+    document.getElementById('team-configure-modal').style.display = 'none';
+    if (currentSeasonId) loadTeams(currentSeasonId);
+}
+
+// ── Roster Configure modal ───────────────────────────────────────────
+
+function showRosterConfigure() {
+    if (!currentTeamId) return;
+    var content = document.getElementById('roster-config-content');
+    content.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Loading...</p>';
+    document.getElementById('roster-configure-modal').style.display = '';
+
+    fetch('/api/teams/' + currentTeamId + '/players')
+        .then(function(r) { return r.json(); })
+        .then(function(players) {
+            var html = '<div>';
+            if (players.length > 0) {
+                players.forEach(function(p) {
+                    html += '<div class="team-row">';
+                    html += '<span>#' + p.uniform_number + ' ' + p.name + '</span>';
+                    html += '</div>';
+                });
+            } else {
+                html += '<p style="color: var(--text-light); font-size: 0.9rem;">No players on roster.</p>';
+            }
+            html += '</div>';
+            content.innerHTML = html;
+        });
+}
+
+function hideRosterModal() {
+    document.getElementById('roster-configure-modal').style.display = 'none';
+    if (currentTeamId) loadRoster(currentTeamId);
+}
+
+// ── Enter key saves team form, update list name live ─────────────────
+
+document.getElementById('team-cfg-form').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        teamCfgSave();
+    }
+});
+
+// ── Close modals on overlay click ────────────────────────────────────
+
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('modal-overlay')) {
+        e.target.style.display = 'none';
+        if (e.target.id === 'sysprefs-modal') window.location.reload();
+        if (currentSeasonId) loadTeams(currentSeasonId);
+        if (currentTeamId) loadRoster(currentTeamId);
+    }
+});
+</script>
 {% endblock %}
