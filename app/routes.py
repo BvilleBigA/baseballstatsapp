@@ -242,6 +242,101 @@ def configure_team_edit(team_id):
     return redirect(url_for("main.index"))
 
 
+@main_bp.route("/configure/team/<int:team_id>/player", methods=["POST"])
+def configure_player_create(team_id):
+    team = Team.query.get_or_404(team_id)
+    name = request.form.get("name", "").strip()
+    if not name:
+        flash("Player name is required.", "error")
+        return redirect(url_for("main.index"))
+    first_name = request.form.get("first_name", "").strip()
+    last_name = request.form.get("last_name", "").strip()
+    player = Player(
+        name=name,
+        first_name=first_name,
+        last_name=last_name,
+        uniform_number=request.form.get("uniform_number", "").strip(),
+        position=request.form.get("position", "").strip(),
+        bats=request.form.get("bats", "").strip(),
+        throws=request.form.get("throws", "").strip(),
+        player_class=request.form.get("player_class", "").strip(),
+        year=request.form.get("year", "").strip(),
+        height=request.form.get("height", "").strip(),
+        weight=request.form.get("weight", "").strip(),
+        hometown=request.form.get("hometown", "").strip(),
+        disabled=request.form.get("disabled") == "on",
+        team_id=team.id,
+    )
+    db.session.add(player)
+    db.session.commit()
+    return redirect(url_for("main.index"))
+
+
+@main_bp.route("/configure/player/<int:player_id>/edit", methods=["POST"])
+def configure_player_edit(player_id):
+    player = Player.query.get_or_404(player_id)
+    player.name = request.form.get("name", player.name).strip()
+    player.first_name = request.form.get("first_name", player.first_name or "").strip()
+    player.last_name = request.form.get("last_name", player.last_name or "").strip()
+    player.uniform_number = request.form.get("uniform_number", player.uniform_number or "").strip()
+    player.position = request.form.get("position", player.position or "").strip()
+    player.bats = request.form.get("bats", player.bats or "").strip()
+    player.throws = request.form.get("throws", player.throws or "").strip()
+    player.player_class = request.form.get("player_class", player.player_class or "").strip()
+    player.year = request.form.get("year", player.year or "").strip()
+    player.height = request.form.get("height", player.height or "").strip()
+    player.weight = request.form.get("weight", player.weight or "").strip()
+    player.hometown = request.form.get("hometown", player.hometown or "").strip()
+    player.disabled = request.form.get("disabled") == "on"
+    db.session.commit()
+    return redirect(url_for("main.index"))
+
+
+@main_bp.route("/configure/player/<int:player_id>/delete", methods=["POST"])
+def configure_player_delete(player_id):
+    player = Player.query.get_or_404(player_id)
+    db.session.delete(player)
+    db.session.commit()
+    return redirect(url_for("main.index"))
+
+
+@main_bp.route("/configure/game", methods=["POST"])
+def configure_game_create():
+    visitor_id = request.form.get("visitor_team_id")
+    home_id = request.form.get("home_team_id")
+    date = request.form.get("date", "")
+    if not visitor_id or not home_id:
+        flash("Both teams are required.", "error")
+        return redirect(url_for("main.index"))
+    game = Game(
+        date=date,
+        visitor_team_id=int(visitor_id),
+        home_team_id=int(home_id),
+        start_time=request.form.get("start_time", ""),
+        duration=request.form.get("duration", ""),
+        scheduled_innings=int(request.form.get("scheduled_innings", 7)),
+        doubleheader=int(request.form.get("doubleheader", 0)),
+        is_complete=False,
+    )
+    db.session.add(game)
+    db.session.commit()
+    return redirect(url_for("main.index"))
+
+
+@main_bp.route("/configure/game/<int:game_id>/edit", methods=["POST"])
+def configure_game_edit(game_id):
+    game = Game.query.get_or_404(game_id)
+    game.date = request.form.get("date", game.date)
+    game.visitor_team_id = int(request.form.get("visitor_team_id", game.visitor_team_id))
+    game.home_team_id = int(request.form.get("home_team_id", game.home_team_id))
+    game.start_time = request.form.get("start_time", game.start_time or "")
+    game.duration = request.form.get("duration", game.duration or "")
+    game.scheduled_innings = int(request.form.get("scheduled_innings", game.scheduled_innings or 7))
+    game.doubleheader = int(request.form.get("doubleheader", game.doubleheader or 0))
+    db.session.commit()
+    return redirect(url_for("main.index"))
+
+
 @main_bp.route("/configure/team/<int:team_id>/delete", methods=["POST"])
 def configure_team_delete(team_id):
     team = Team.query.get_or_404(team_id)
@@ -332,9 +427,47 @@ def player_detail(player_id):
                            fielding=fielding_agg, game_log=game_log)
 
 
-@main_bp.route("/game/<int:game_id>")
-def game_detail(game_id):
-    game = Game.query.get_or_404(game_id)
+@main_bp.route("/gameinput/<season_slug>/<game_slug>/scoring")
+def game_detail(season_slug, game_slug):
+    # Find season by slug
+    seasons = Season.query.all()
+    season = next((s for s in seasons if s.slug == season_slug), None)
+    if season is None:
+        from flask import abort
+        abort(404)
+
+    # Parse game_slug: MMDDYYYY_VIS_HOME_DH
+    parts = game_slug.split('_')
+    if len(parts) != 4:
+        from flask import abort
+        abort(404)
+
+    date_str, vis_abbr, home_abbr, dh_str = parts
+    # Convert MMDDYYYY -> YYYY-MM-DD
+    if len(date_str) == 8:
+        date_db = f"{date_str[4:8]}-{date_str[0:2]}-{date_str[2:4]}"
+    else:
+        from flask import abort
+        abort(404)
+
+    dh_num = int(dh_str) if dh_str.isdigit() else 0
+
+    # Find teams in this season by abbreviation
+    season_teams = Team.query.filter_by(season_id=season.id).all()
+    vis_team = next((t for t in season_teams if t.abbreviation == vis_abbr), None)
+    home_team = next((t for t in season_teams if t.abbreviation == home_abbr), None)
+    if not vis_team or not home_team:
+        from flask import abort
+        abort(404)
+
+    # Find the game
+    game = Game.query.filter_by(
+        date=date_db,
+        visitor_team_id=vis_team.id,
+        home_team_id=home_team.id,
+        doubleheader=dh_num,
+    ).first_or_404()
+
     innings = InningScore.query.filter_by(game_id=game.id).order_by(InningScore.inning).all()
 
     # Visitor batting
@@ -361,10 +494,25 @@ def game_detail(game_id):
     # Play-by-play
     plays = Play.query.filter_by(game_id=game.id).order_by(Play.sequence).all()
 
-    return render_template("game_detail.html", game=game, innings=innings,
+    # Build defensive lineup map {position_code: last_name} for field display
+    # Home team fields first (top of 1st), so default to home starters
+    home_starters = [s for s in h_batting if s.is_starter]
+    defense = {}
+    for s in home_starters:
+        if s.position:
+            defense[s.position] = s.player.last_name or s.player.name.split()[-1]
+
+    # Also build visitor starters for when they field
+    vis_starters = [s for s in v_batting if s.is_starter]
+    vis_defense = {}
+    for s in vis_starters:
+        if s.position:
+            vis_defense[s.position] = s.player.last_name or s.player.name.split()[-1]
+
+    return render_template("game_detail.html", game=game, season=season, innings=innings,
                            v_batting=v_batting, h_batting=h_batting,
                            v_pitching=v_pitching, h_pitching=h_pitching,
-                           plays=plays)
+                           plays=plays, defense=defense, vis_defense=vis_defense)
 
 
 # ── API routes ────────────────────────────────────────────────────────────────
@@ -390,6 +538,9 @@ def api_season_teams(season_id):
 
 @api_bp.route("/seasons/<int:season_id>/games")
 def api_season_games(season_id):
+    season = Season.query.get(season_id)
+    if not season:
+        return jsonify([])
     teams = Team.query.filter_by(season_id=season_id).all()
     team_ids = [t.id for t in teams]
     if not team_ids:
@@ -406,8 +557,31 @@ def api_season_games(season_id):
             "home": g.home_team.name if g.home_team else "",
             "score": f"{g.visitor_runs}-{g.home_runs}" if g.is_complete else "",
             "is_complete": g.is_complete,
+            "url": f"/gameinput/{season.slug}/{g.slug}/scoring",
         })
     return jsonify(results)
+
+
+@api_bp.route("/games/<int:game_id>")
+def api_game_detail(game_id):
+    g = Game.query.get_or_404(game_id)
+    return jsonify({
+        "id": g.id,
+        "date": g.date or "",
+        "start_time": g.start_time or "",
+        "duration": g.duration or "",
+        "scheduled_innings": g.scheduled_innings or 7,
+        "visitor_team_id": g.visitor_team_id,
+        "home_team_id": g.home_team_id,
+        "visitor_runs": g.visitor_runs,
+        "home_runs": g.home_runs,
+        "is_complete": g.is_complete,
+        "location": g.location or "",
+        "stadium": g.stadium or "",
+        "weather": g.weather or "",
+        "attendance": g.attendance or 0,
+        "doubleheader": g.doubleheader or 0,
+    })
 
 
 @api_bp.route("/teams/<int:team_id>/players")
@@ -416,10 +590,18 @@ def api_team_players(team_id):
     return jsonify([{
         "id": p.id,
         "name": p.name,
+        "first_name": p.first_name or "",
+        "last_name": p.last_name or "",
         "uniform_number": p.uniform_number or "",
+        "position": p.position or "",
         "bats": p.bats or "",
         "throws": p.throws or "",
         "player_class": p.player_class or "",
+        "year": p.year or "",
+        "height": p.height or "",
+        "weight": p.weight or "",
+        "hometown": p.hometown or "",
+        "disabled": p.disabled or False,
     } for p in players])
 
 

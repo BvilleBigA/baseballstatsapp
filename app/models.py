@@ -1,3 +1,4 @@
+import re
 from app import db
 
 
@@ -8,6 +9,14 @@ class Season(db.Model):
     rules = db.Column(db.String(30), default="rules_hs_sb")  # rules_hs_ba, rules_hs_sb, rules_ncaa_ba, rules_ncaa_sb, rules_mlb
     gender = db.Column(db.String(20), default="female")  # male, female, coed
     teams = db.relationship("Team", backref="season", lazy=True)
+
+    @property
+    def slug(self):
+        """URL-friendly version of the season name, e.g. 'Demo Season' -> 'demo-season'."""
+        s = self.name.lower().strip()
+        s = re.sub(r'[^a-z0-9\s-]', '', s)
+        s = re.sub(r'[\s]+', '-', s)
+        return s
 
     def __repr__(self):
         return f"<Season {self.name}>"
@@ -41,11 +50,19 @@ class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     external_id = db.Column(db.String(50))  # playerId from XML
     name = db.Column(db.String(200), nullable=False)
+    first_name = db.Column(db.String(100), default="")
+    last_name = db.Column(db.String(100), default="")
     short_name = db.Column(db.String(100))
     uniform_number = db.Column(db.String(10))
-    bats = db.Column(db.String(5))
-    throws = db.Column(db.String(5))
+    position = db.Column(db.String(30), default="")
+    bats = db.Column(db.String(10), default="")
+    throws = db.Column(db.String(10), default="")
     player_class = db.Column(db.String(10))  # class year
+    year = db.Column(db.String(10), default="")
+    height = db.Column(db.String(10), default="")
+    weight = db.Column(db.String(10), default="")
+    hometown = db.Column(db.String(200), default="")
+    disabled = db.Column(db.Boolean, default=False)
     team_id = db.Column(db.Integer, db.ForeignKey("team.id"))
     batting_stats = db.relationship("BattingStats", backref="player", lazy=True)
     pitching_stats = db.relationship("PitchingStats", backref="player", lazy=True)
@@ -69,6 +86,7 @@ class Game(db.Model):
     weather = db.Column(db.String(200))
     is_league_game = db.Column(db.Boolean, default=True)
     is_complete = db.Column(db.Boolean, default=False)
+    doubleheader = db.Column(db.Integer, default=0)  # 0 = not a doubleheader, 1 = game 1, 2 = game 2
     used_dh = db.Column(db.String(5))
 
     visitor_team_id = db.Column(db.Integer, db.ForeignKey("team.id"))
@@ -97,6 +115,20 @@ class Game(db.Model):
     __table_args__ = (
         db.UniqueConstraint("date", "visitor_team_id", "home_team_id", "start_time", name="uq_game"),
     )
+
+    @property
+    def slug(self):
+        """URL slug: MMDDYYYY_VisAbbrev_HomeAbbrev_DoubleheaderNum."""
+        # date is stored as 'YYYY-MM-DD'
+        if self.date and len(self.date) >= 10:
+            parts = self.date.split('-')
+            date_str = parts[1] + parts[2] + parts[0]  # MMDDYYYY
+        else:
+            date_str = '00000000'
+        vis_abbr = (self.visitor_team.abbreviation if self.visitor_team and self.visitor_team.abbreviation else 'VIS')
+        home_abbr = (self.home_team.abbreviation if self.home_team and self.home_team.abbreviation else 'HOM')
+        dh = self.doubleheader or 0
+        return f"{date_str}_{vis_abbr}_{home_abbr}_{dh}"
 
     def __repr__(self):
         return f"<Game {self.date}: {self.visitor_team_id} @ {self.home_team_id}>"

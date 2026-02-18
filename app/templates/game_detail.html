@@ -1,35 +1,34 @@
 {% extends "base.html" %}
 {% block title %}{{ game.visitor_team.name }} @ {{ game.home_team.name }} - {{ game.date }}{% endblock %}
 {% block content %}
-<h1>
-    <a href="{{ url_for('main.team_detail', team_id=game.visitor_team.id) }}" class="team-link">{{ game.visitor_team.name }}</a>
-    {{ game.visitor_runs }} &ndash;
-    <a href="{{ url_for('main.team_detail', team_id=game.home_team.id) }}" class="team-link">{{ game.home_team.name }}</a>
-    {{ game.home_runs }}
-</h1>
-<p style="color: var(--text-light); margin-bottom: 1rem;">
-    {{ game.date }} &mdash; {{ game.location }}
-    {% if game.start_time %} &mdash; {{ game.start_time }}{% endif %}
-    {% if game.duration %} &mdash; Duration: {{ game.duration }}{% endif %}
-    {% if game.weather %} &mdash; {{ game.weather }}{% endif %}
-    {% if game.is_complete %}<span class="badge win" style="margin-left: 0.5rem;">Final</span>{% endif %}
-</p>
 
-<!-- Line Score -->
-<div class="card">
-    <h2>Line Score</h2>
+<!-- ═══ LINE SCORE (auto-width, top) ═══ -->
+<div class="scoring-panel" style="margin-bottom: 0.5rem; flex-shrink: 0; align-self: flex-start; display: inline-block;">
+    <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>Line Score</span>
+        <span id="inning-indicator" style="font-weight: 400; text-transform: none; letter-spacing: 0;">
+            {% if game.is_complete %}Final
+            {% elif innings %}
+                {% set last_inn = innings[-1] %}
+                {% if last_inn.home_score == '-' or last_inn.home_score is none %}Top {{ last_inn.inning }}
+                {% else %}Bot {{ last_inn.inning }}{% endif %}
+            {% else %}Top 1{% endif %}
+        </span>
+    </div>
     <div class="table-responsive">
-        <table class="linescore-table">
+        <table class="linescore-table ls-compact" id="linescore-table" style="width: auto;">
             <thead>
                 <tr>
-                    <th style="text-align: left; min-width: 120px;">Team</th>
+                    <th style="text-align: left; min-width: 50px;"></th>
                     {% for inn in innings %}
                     <th>{{ inn.inning }}</th>
                     {% endfor %}
+                    {% if not innings %}
+                    <th>1</th>
+                    {% endif %}
                     <th class="totals-col">R</th>
                     <th>H</th>
                     <th>E</th>
-                    <th>LOB</th>
                 </tr>
             </thead>
             <tbody>
@@ -38,185 +37,475 @@
                     {% for inn in innings %}
                     <td>{{ inn.visitor_score }}</td>
                     {% endfor %}
+                    {% if not innings %}<td>0</td>{% endif %}
                     <td class="totals-col">{{ game.visitor_runs }}</td>
                     <td>{{ game.visitor_hits }}</td>
                     <td>{{ game.visitor_errors }}</td>
-                    <td>{{ game.visitor_lob }}</td>
                 </tr>
                 <tr>
                     <td style="text-align: left; font-weight: 700;">{{ game.home_team.name }}</td>
                     {% for inn in innings %}
                     <td>{{ inn.home_score }}</td>
                     {% endfor %}
+                    {% if not innings %}<td>-</td>{% endif %}
                     <td class="totals-col">{{ game.home_runs }}</td>
                     <td>{{ game.home_hits }}</td>
                     <td>{{ game.home_errors }}</td>
-                    <td>{{ game.home_lob }}</td>
                 </tr>
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- Tabs -->
-<div class="section-tabs" data-group="box">
-    <button class="active" data-tab="batting" onclick="showTab('box','batting')">Batting</button>
-    <button data-tab="pitching" onclick="showTab('box','pitching')">Pitching</button>
-    <button data-tab="plays" onclick="showTab('box','plays')">Play-by-Play</button>
-</div>
+<!-- ═══ MAIN 3-COLUMN AREA ═══ -->
+<div class="scoring-layout">
 
-<!-- Batting Box Score -->
-<div id="box-batting" class="tab-content active" data-group="box">
-    {% macro batting_table(team_name, stats) %}
-    <div class="card">
-        <h3>{{ team_name }}</h3>
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="text-align: left;">Player</th>
-                        <th>Pos</th>
-                        <th>AB</th>
-                        <th>R</th>
-                        <th>H</th>
-                        <th>RBI</th>
-                        <th>2B</th>
-                        <th>3B</th>
-                        <th>HR</th>
-                        <th>BB</th>
-                        <th>SO</th>
-                        <th>SB</th>
-                        <th>HBP</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for stat in stats %}
-                    <tr>
-                        <td style="text-align: left;">
-                            {% if stat.is_sub %}<span style="padding-left: 1rem;"></span>{% endif %}
-                            <a href="{{ url_for('main.player_detail', player_id=stat.player.id) }}" class="player-link">{{ stat.player.name }}</a>
-                        </td>
-                        <td>{{ stat.position }}</td>
-                        <td>{{ stat.ab }}</td>
-                        <td>{{ stat.r }}</td>
-                        <td>{{ stat.h }}</td>
-                        <td>{{ stat.rbi }}</td>
-                        <td>{{ stat.doubles }}</td>
-                        <td>{{ stat.triples }}</td>
-                        <td>{{ stat.hr }}</td>
-                        <td>{{ stat.bb }}</td>
-                        <td>{{ stat.so }}</td>
-                        <td>{{ stat.sb }}</td>
-                        <td>{{ stat.hbp }}</td>
-                    </tr>
-                    {% endfor %}
-                    <tr style="font-weight: 700; border-top: 2px solid var(--primary);">
-                        <td style="text-align: left;">Totals</td>
-                        <td></td>
-                        <td>{{ stats | sum(attribute='ab') }}</td>
-                        <td>{{ stats | sum(attribute='r') }}</td>
-                        <td>{{ stats | sum(attribute='h') }}</td>
-                        <td>{{ stats | sum(attribute='rbi') }}</td>
-                        <td>{{ stats | sum(attribute='doubles') }}</td>
-                        <td>{{ stats | sum(attribute='triples') }}</td>
-                        <td>{{ stats | sum(attribute='hr') }}</td>
-                        <td>{{ stats | sum(attribute='bb') }}</td>
-                        <td>{{ stats | sum(attribute='so') }}</td>
-                        <td>{{ stats | sum(attribute='sb') }}</td>
-                        <td>{{ stats | sum(attribute='hbp') }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endmacro %}
-
-    {{ batting_table(game.visitor_team.name, v_batting) }}
-    {{ batting_table(game.home_team.name, h_batting) }}
-</div>
-
-<!-- Pitching Box Score -->
-<div id="box-pitching" class="tab-content" data-group="box">
-    {% macro pitching_table(team_name, stats) %}
-    <div class="card">
-        <h3>{{ team_name }}</h3>
-        <div class="table-responsive">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="text-align: left;">Pitcher</th>
-                        <th>IP</th>
-                        <th>H</th>
-                        <th>R</th>
-                        <th>ER</th>
-                        <th>BB</th>
-                        <th>SO</th>
-                        <th>HR</th>
-                        <th>HBP</th>
-                        <th>WP</th>
-                        <th>BF</th>
-                        <th>P-S</th>
-                        <th>Dec</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for stat in stats %}
-                    <tr>
-                        <td style="text-align: left;">
-                            <a href="{{ url_for('main.player_detail', player_id=stat.player.id) }}" class="player-link">{{ stat.player.name }}</a>
-                        </td>
-                        <td>{{ stat.ip }}</td>
-                        <td>{{ stat.h }}</td>
-                        <td>{{ stat.r }}</td>
-                        <td>{{ stat.er }}</td>
-                        <td>{{ stat.bb }}</td>
-                        <td>{{ stat.so }}</td>
-                        <td>{{ stat.hr }}</td>
-                        <td>{{ stat.hbp }}</td>
-                        <td>{{ stat.wp }}</td>
-                        <td>{{ stat.bf }}</td>
-                        <td>{{ stat.pitches }}-{{ stat.strikes }}</td>
-                        <td>
-                            {% if stat.win %}W{% elif stat.loss %}L{% elif stat.save %}S{% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endmacro %}
-
-    {{ pitching_table(game.visitor_team.name, v_pitching) }}
-    {{ pitching_table(game.home_team.name, h_pitching) }}
-</div>
-
-<!-- Play-by-Play -->
-<div id="box-plays" class="tab-content" data-group="box">
-    <div class="card play-by-play">
-        <h2>Play-by-Play</h2>
-        {% set current_inning = [0] %}
-        {% set current_half = [''] %}
-        {% for play in plays %}
-            {% if play.inning != current_inning[0] or play.half != current_half[0] %}
-                {% if current_inning.append(play.inning) %}{% endif %}
-                {% if current_half.append(play.half) %}{% endif %}
-                {# Jinja2 workaround for mutable state #}
-                {% if current_inning | length > 1 %}{% if current_inning.pop(0) is not none %}{% endif %}{% endif %}
-                {% if current_half | length > 1 %}{% if current_half.pop(0) is not none %}{% endif %}{% endif %}
-                <div class="inning-header">
-                    {% if play.half == 'top' %}Top{% else %}Bottom{% endif %} of Inning {{ play.inning }}
-                </div>
-            {% endif %}
-            {% if play.narrative %}
-            <div class="play-item">
-                {{ play.narrative }}
-                {% if play.pitch_sequence %}
-                <span class="pitches">[{{ play.pitch_sequence }}]</span>
+    <!-- LEFT: Play-by-Play -->
+    <div class="scoring-left">
+        <div class="scoring-panel" style="height: 100%; display: flex; flex-direction: column;">
+            <div class="panel-header">Play-by-Play</div>
+            <div id="pbp-list" style="flex: 1; overflow-y: auto; padding: 0.4rem;">
+                {% if plays %}
+                {% set current_inning = [0] %}
+                {% set current_half = [''] %}
+                {% for play in plays %}
+                    {% if play.inning != current_inning[0] or play.half != current_half[0] %}
+                        {% if current_inning.append(play.inning) %}{% endif %}
+                        {% if current_half.append(play.half) %}{% endif %}
+                        {% if current_inning | length > 1 %}{% if current_inning.pop(0) is not none %}{% endif %}{% endif %}
+                        {% if current_half | length > 1 %}{% if current_half.pop(0) is not none %}{% endif %}{% endif %}
+                        <div class="pbp-inning-hdr">
+                            {% if play.half == 'top' %}&#9650;{% else %}&#9660;{% endif %} {{ play.inning }}
+                        </div>
+                    {% endif %}
+                    {% if play.narrative %}
+                    <div class="pbp-play">{{ play.narrative }}</div>
+                    {% endif %}
+                {% endfor %}
+                {% else %}
+                <div style="color: var(--text-light); font-size: 0.8rem; padding: 0.5rem;">No plays recorded.</div>
                 {% endif %}
             </div>
-            {% endif %}
-        {% endfor %}
+        </div>
+    </div>
+
+    <!-- CENTER: Field + Data Entry -->
+    <div class="scoring-center">
+        <!-- Baseball Field -->
+        <div class="field-wrapper">
+            <svg class="baseball-field-svg" viewBox="15 30 370 305" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <clipPath id="fairClip">
+                        <polygon points="200,300 0,85 0,0 400,0 400,85"/>
+                    </clipPath>
+                </defs>
+
+                <!-- ── Outfield grass (fair territory, vertex at new home) ── -->
+                <polygon points="200,300 0,85 0,0 400,0 400,85" fill="#3a7a32"/>
+
+                <!-- Mowing stripes (keep outfield origin unchanged at 200,285) -->
+                <path d="M 200,285 L 59,144 A 200 200 0 0 1 341,144 Z" fill="#408036"/>
+                <path d="M 200,285 L 83,168 A 165 165 0 0 1 317,168 Z" fill="#3a7a32"/>
+                <path d="M 200,285 L 105,190 A 130 130 0 0 1 295,190 Z" fill="#408036"/>
+                <path d="M 200,285 L 122,207 A 110 110 0 0 1 278,207 Z" fill="#3a7a32"/>
+
+                <!-- ── Infield dirt (clipped to fair territory) ── -->
+                <g clip-path="url(#fairClip)">
+                    <path d="M 85,240 A 125,180 0 0,1 315,240 Z" fill="#c4a46c"/>
+                    <polygon points="147,240 200,300 253,240" fill="#c4a46c"/>
+                </g>
+                <!-- Home plate dirt (visible outside foul lines) -->
+                <circle cx="200" cy="300" r="24" fill="#c4a46c"/>
+
+                <!-- Infield grass (diamond cutout) -->
+                <polygon points="200,180 260,240 200,300 140,240" fill="#4a9040"/>
+
+                <!-- Base dirt cutouts -->
+                <circle cx="256" cy="236" r="9" fill="#c4a46c"/>
+                <circle cx="200" cy="180" r="9" fill="#c4a46c"/>
+                <circle cx="144" cy="236" r="9" fill="#c4a46c"/>
+
+                <!-- Foul lines (from home through bases to edges) -->
+                <line x1="200" y1="300" x2="0" y2="85" stroke="white" stroke-width="2" opacity="0.7"/>
+                <line x1="200" y1="300" x2="400" y2="85" stroke="white" stroke-width="2" opacity="0.7"/>
+
+                <!-- Pitcher's mound -->
+                <circle cx="200" cy="240" r="14" fill="#c4a46c"/>
+                <rect x="194" y="238" width="12" height="4" fill="white" rx="1"/>
+
+                <!-- Bases (inside foul lines) -->
+                <polygon points="200,305 206,300 206,295 194,295 194,300" fill="white"/>
+                <rect x="251" y="231" width="10" height="10" fill="white" transform="rotate(45 256 236)" rx="1"/>
+                <rect x="195" y="175" width="10" height="10" fill="white" transform="rotate(45 200 180)" rx="1"/>
+                <rect x="139" y="231" width="10" height="10" fill="white" transform="rotate(45 144 236)" rx="1"/>
+
+                <!-- Base runner indicators (hidden by default) -->
+                <circle id="svg-runner-1b" cx="256" cy="236" r="7" fill="#ff6b35" stroke="white" stroke-width="2" display="none"/>
+                <circle id="svg-runner-2b" cx="200" cy="180" r="7" fill="#ff6b35" stroke="white" stroke-width="2" display="none"/>
+                <circle id="svg-runner-3b" cx="144" cy="236" r="7" fill="#ff6b35" stroke="white" stroke-width="2" display="none"/>
+
+                <!-- Position labels (number above name) -->
+                <text x="200" y="253" class="pos-num-svg" text-anchor="middle">1</text>
+                <text x="200" y="266" class="pos-name-svg" text-anchor="middle">{{ defense.get('P', '') }}</text>
+                <text x="200" y="321" class="pos-num-svg" text-anchor="middle">2</text>
+                <text x="200" y="334" class="pos-name-svg" text-anchor="middle">{{ defense.get('C', '') }}</text>
+                <text x="308" y="236" class="pos-num-svg" text-anchor="middle">3</text>
+                <text x="308" y="249" class="pos-name-svg" text-anchor="middle">{{ defense.get('1B', '') }}</text>
+                <text x="293" y="176" class="pos-num-svg" text-anchor="middle">4</text>
+                <text x="293" y="189" class="pos-name-svg" text-anchor="middle">{{ defense.get('2B', '') }}</text>
+                <text x="92" y="236" class="pos-num-svg" text-anchor="middle">5</text>
+                <text x="92" y="249" class="pos-name-svg" text-anchor="middle">{{ defense.get('3B', '') }}</text>
+                <text x="107" y="176" class="pos-num-svg" text-anchor="middle">6</text>
+                <text x="107" y="189" class="pos-name-svg" text-anchor="middle">{{ defense.get('SS', '') }}</text>
+                <text x="67" y="96" class="pos-num-svg" text-anchor="middle">7</text>
+                <text x="67" y="109" class="pos-name-svg" text-anchor="middle">{{ defense.get('LF', '') }}</text>
+                <text x="200" y="44" class="pos-num-svg" text-anchor="middle">8</text>
+                <text x="200" y="57" class="pos-name-svg" text-anchor="middle">{{ defense.get('CF', '') }}</text>
+                <text x="333" y="96" class="pos-num-svg" text-anchor="middle">9</text>
+                <text x="333" y="109" class="pos-name-svg" text-anchor="middle">{{ defense.get('RF', '') }}</text>
+            </svg>
+        </div>
+
+        <!-- Data Entry -->
+        <div class="scoring-panel" style="flex-shrink: 0; margin-top: 0.5rem;">
+            <div class="panel-header">Data Entry</div>
+            <div style="padding: 0.5rem;">
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;">
+                    <label style="font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Batter:</label>
+                    <span id="de-batter-name" style="font-size: 0.85rem; font-weight: 700; color: var(--primary);">---</span>
+                    <span id="de-batter-num" style="font-size: 0.8rem; color: var(--text-light);">#--</span>
+                    <span style="margin-left: auto; font-size: 0.8rem; color: var(--text-light);">
+                        Outs: <span id="de-outs" style="font-weight: 700;">0</span>
+                    </span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                    <label style="font-size: 0.8rem; font-weight: 600; white-space: nowrap;">Count:</label>
+                    <span id="de-count" style="font-size: 0.85rem; font-weight: 700;">0-0</span>
+                    <label style="font-size: 0.8rem; font-weight: 600; white-space: nowrap; margin-left: 1rem;">Pitcher:</label>
+                    <span id="de-pitcher-name" style="font-size: 0.85rem; color: var(--primary);">---</span>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    <button class="de-btn" onclick="deAction('single')">1B</button>
+                    <button class="de-btn" onclick="deAction('double')">2B</button>
+                    <button class="de-btn" onclick="deAction('triple')">3B</button>
+                    <button class="de-btn" onclick="deAction('hr')">HR</button>
+                    <button class="de-btn" onclick="deAction('bb')">BB</button>
+                    <button class="de-btn" onclick="deAction('hbp')">HBP</button>
+                    <button class="de-btn" onclick="deAction('so')">K</button>
+                    <button class="de-btn" onclick="deAction('kl')">KL</button>
+                    <button class="de-btn" onclick="deAction('go')">GO</button>
+                    <button class="de-btn" onclick="deAction('fo')">FO</button>
+                    <button class="de-btn" onclick="deAction('fc')">FC</button>
+                    <button class="de-btn" onclick="deAction('sac')">SAC</button>
+                    <button class="de-btn" onclick="deAction('sf')">SF</button>
+                    <button class="de-btn" onclick="deAction('e')">E</button>
+                    <button class="de-btn" onclick="deAction('dp')">DP</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: Previous At-Bats / Pitcher Stats / Batting Lineup -->
+    <div class="scoring-right" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <div class="scoring-panel" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+            <div class="panel-header">Previous At-Bats</div>
+            <div id="prev-ab-list" style="flex: 1; overflow-y: auto; padding: 0.4rem;">
+                <div style="color: var(--text-light); font-size: 0.8rem; padding: 0.5rem;">Select a batter to see at-bat history.</div>
+            </div>
+        </div>
+        <div class="scoring-panel" style="flex-shrink: 0;">
+            <div class="panel-header">Pitcher</div>
+            <div id="pitcher-stats" style="padding: 0.4rem;">
+                <div id="pitcher-stats-content" style="font-size: 0.78rem;">
+                    <div style="font-weight: 700; margin-bottom: 0.2rem;" id="pitcher-stat-name">---</div>
+                    <table style="width: 100%; font-size: 0.75rem;">
+                        <tr><td>Balls</td><td style="text-align: right; font-weight: 700;" id="pitcher-stat-balls">0</td></tr>
+                        <tr><td>Strikes</td><td style="text-align: right; font-weight: 700;" id="pitcher-stat-strikes">0</td></tr>
+                        <tr><td>Total Pitches</td><td style="text-align: right; font-weight: 700;" id="pitcher-stat-pitches">0</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="scoring-panel" style="flex-shrink: 0;">
+            <div class="panel-header" id="lineup-header">Batting Lineup</div>
+            <div id="batting-lineup" style="padding: 0.4rem;">
+            </div>
+        </div>
     </div>
 </div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+    /* ── Override container for scoring page ──────────────────────── */
+    html, body { overflow: hidden; height: 100%; }
+    footer { display: none; }
+    .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0.5rem 0.75rem;
+        height: calc(100vh - 56px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    /* ── Scoring Panels ──────────────────────────────────────────── */
+    .scoring-panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .panel-header {
+        background: var(--primary);
+        color: white;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 0.3rem 0.6rem;
+    }
+
+    /* ── Line Score ──────────────────────────────────────────────── */
+    .ls-compact { font-size: 0.8rem; margin: 0; }
+    .ls-compact th, .ls-compact td {
+        padding: 0.25rem 0.5rem;
+        min-width: 26px;
+        text-align: center;
+    }
+    .ls-compact th { font-size: 0.72rem; }
+
+    /* ── 3-Column Layout ─────────────────────────────────────────── */
+    .scoring-layout {
+        display: flex;
+        gap: 0.5rem;
+        flex: 1;
+        min-height: 0;
+    }
+    .scoring-left {
+        width: 180px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .scoring-center {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    .scoring-right {
+        width: 170px;
+        flex-shrink: 0;
+    }
+
+    /* ── Play-by-Play ────────────────────────────────────────────── */
+    .pbp-inning-hdr {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--primary);
+        padding: 0.25rem 0;
+        border-bottom: 1px solid var(--border);
+        margin-top: 0.25rem;
+    }
+    .pbp-play {
+        font-size: 0.78rem;
+        padding: 0.15rem 0 0.15rem 0.5rem;
+        border-left: 2px solid var(--border);
+        margin: 2px 0;
+        color: var(--text);
+    }
+
+    /* ── Baseball Field (SVG) ────────────────────────────────────── */
+    .field-wrapper {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #1a4a1a;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .baseball-field-svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    .pos-num-svg {
+        fill: white;
+        font-size: 13px;
+        font-weight: 700;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        stroke: rgba(0,0,0,0.6);
+        stroke-width: 3px;
+        paint-order: stroke fill;
+    }
+    .pos-name-svg {
+        fill: white;
+        font-size: 11px;
+        font-weight: 600;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        stroke: rgba(0,0,0,0.6);
+        stroke-width: 3px;
+        paint-order: stroke fill;
+    }
+
+    /* ── Data Entry ──────────────────────────────────────────────── */
+    .de-btn {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+        min-width: 36px;
+        text-align: center;
+        transition: background 0.15s;
+    }
+    .de-btn:hover { background: #edf2f7; }
+    .de-btn:active { background: var(--primary); color: white; }
+
+    /* ── Batting Lineup Table ──────────────────────────────────────── */
+    .lineup-table {
+        width: 100%;
+        font-size: 0.72rem;
+        border-collapse: collapse;
+    }
+    .lineup-table th {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-light);
+        border-bottom: 1px solid var(--border);
+        padding: 0.2rem 0.3rem;
+        text-align: left;
+    }
+    .lineup-table td {
+        padding: 0.2rem 0.3rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .lineup-table tr:last-child td { border-bottom: none; }
+</style>
+
+<script>
+    // ── Game state ─────────────────────────────────────────────────
+    var currentGameId = {{ game.id }};
+    var currentGameUrl = '{{ url_for("main.game_detail", season_slug=season.slug, game_slug=game.slug) }}';
+    gameIsOpen = true;
+    updateFileMenuState();
+
+    // Defense data for field display
+    var homeDefense = {{ defense | tojson }};
+    var visDefense = {{ vis_defense | tojson }};
+
+    // At-bat data
+    var vBattingData = [
+        {% for stat in v_batting %}
+        {
+            name: "{{ stat.player.name }}",
+            lastName: "{{ stat.player.last_name or stat.player.name.split()[-1] }}",
+            num: "{{ stat.player.uniform_number or '' }}",
+            pos: "{{ stat.position }}",
+            ab: {{ stat.ab }}, r: {{ stat.r }}, h: {{ stat.h }},
+            rbi: {{ stat.rbi }}, bb: {{ stat.bb }}, so: {{ stat.so }},
+            doubles: {{ stat.doubles }}, triples: {{ stat.triples }}, hr: {{ stat.hr }},
+            hbp: {{ stat.hbp }}, order: {{ stat.batting_order or 0 }}
+        },
+        {% endfor %}
+    ];
+    var hBattingData = [
+        {% for stat in h_batting %}
+        {
+            name: "{{ stat.player.name }}",
+            lastName: "{{ stat.player.last_name or stat.player.name.split()[-1] }}",
+            num: "{{ stat.player.uniform_number or '' }}",
+            pos: "{{ stat.position }}",
+            ab: {{ stat.ab }}, r: {{ stat.r }}, h: {{ stat.h }},
+            rbi: {{ stat.rbi }}, bb: {{ stat.bb }}, so: {{ stat.so }},
+            doubles: {{ stat.doubles }}, triples: {{ stat.triples }}, hr: {{ stat.hr }},
+            hbp: {{ stat.hbp }}, order: {{ stat.batting_order or 0 }}
+        },
+        {% endfor %}
+    ];
+
+    // Pitching data
+    var vPitchingData = [
+        {% for stat in v_pitching %}
+        {
+            name: "{{ stat.player.name }}",
+            lastName: "{{ stat.player.last_name or stat.player.name.split()[-1] }}",
+            num: "{{ stat.player.uniform_number or '' }}",
+            pitches: {{ stat.pitches }}, strikes: {{ stat.strikes }},
+            ip: {{ stat.ip }}, h: {{ stat.h }}, r: {{ stat.r }},
+            er: {{ stat.er }}, bb: {{ stat.bb }}, so: {{ stat.so }}
+        },
+        {% endfor %}
+    ];
+    var hPitchingData = [
+        {% for stat in h_pitching %}
+        {
+            name: "{{ stat.player.name }}",
+            lastName: "{{ stat.player.last_name or stat.player.name.split()[-1] }}",
+            num: "{{ stat.player.uniform_number or '' }}",
+            pitches: {{ stat.pitches }}, strikes: {{ stat.strikes }},
+            ip: {{ stat.ip }}, h: {{ stat.h }}, r: {{ stat.r }},
+            er: {{ stat.er }}, bb: {{ stat.bb }}, so: {{ stat.so }}
+        },
+        {% endfor %}
+    ];
+
+    // Track which half is batting: "top" = visitor bats, "bottom" = home bats
+    var currentHalf = "top";
+
+    function updatePitcherStats() {
+        // When top half, home team is pitching; bottom half, visitor is pitching
+        var pitchers = currentHalf === "top" ? hPitchingData : vPitchingData;
+        var el = document.getElementById('pitcher-stats-content');
+        if (pitchers.length > 0) {
+            var p = pitchers[pitchers.length - 1]; // current (last) pitcher
+            document.getElementById('pitcher-stat-name').textContent = p.name + (p.num ? ' #' + p.num : '');
+            document.getElementById('pitcher-stat-balls').textContent = p.pitches - p.strikes;
+            document.getElementById('pitcher-stat-strikes').textContent = p.strikes;
+            document.getElementById('pitcher-stat-pitches').textContent = p.pitches;
+        } else {
+            document.getElementById('pitcher-stat-name').textContent = '---';
+            document.getElementById('pitcher-stat-balls').textContent = '0';
+            document.getElementById('pitcher-stat-strikes').textContent = '0';
+            document.getElementById('pitcher-stat-pitches').textContent = '0';
+        }
+    }
+
+    function updateBattingLineup() {
+        var data = currentHalf === "top" ? vBattingData : hBattingData;
+        var teamName = currentHalf === "top"
+            ? "{{ game.visitor_team.abbreviation or game.visitor_team.name[:3] | upper }}"
+            : "{{ game.home_team.abbreviation or game.home_team.name[:3] | upper }}";
+        document.getElementById('lineup-header').textContent = teamName + ' Batting';
+
+        // Filter to starters (order > 0), sort by batting order
+        var lineup = data.filter(function(b) { return b.order > 0; });
+        lineup.sort(function(a, b) { return a.order - b.order; });
+
+        var html = '<table class="lineup-table"><tbody>';
+        for (var i = 0; i < lineup.length; i++) {
+            var b = lineup[i];
+            html += '<tr><td>' + b.order + '</td><td>' + b.lastName + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        document.getElementById('batting-lineup').innerHTML = html;
+    }
+
+    // Initialize on load
+    updatePitcherStats();
+    updateBattingLineup();
+
+    function deAction(type) {
+        console.log('Action:', type);
+    }
+</script>
 {% endblock %}

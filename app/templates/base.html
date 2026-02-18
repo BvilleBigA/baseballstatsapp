@@ -51,6 +51,73 @@
         nav .brand { font-size: 1.2rem; letter-spacing: -0.5px; }
         nav .nav-links { display: flex; gap: 0.25rem; }
 
+        .nav-dropdown { position: relative; }
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 260px;
+            z-index: 2000;
+            padding: 4px 0;
+        }
+        .dropdown-menu.open { display: block; }
+        .dropdown-menu button {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: 0.45rem 1rem;
+            border: none;
+            background: none;
+            font-size: 0.85rem;
+            color: var(--text);
+            cursor: pointer;
+            text-align: left;
+        }
+        .dropdown-menu button .shortcut {
+            margin-left: auto;
+        }
+        .dropdown-menu button:hover:not(:disabled) { background: #edf2f7; }
+        .dropdown-menu button:disabled {
+            color: #a0aec0;
+            cursor: default;
+        }
+        .dropdown-menu .shortcut {
+            font-size: 0.78rem;
+            color: var(--text-light);
+        }
+        .dropdown-menu button:disabled .shortcut { color: #cbd5e0; }
+        .dropdown-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+        .nav-submenu-wrapper {
+            position: relative;
+        }
+        .nav-submenu-wrapper .submenu {
+            display: none;
+            position: absolute;
+            left: 100%;
+            top: 0;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            min-width: 140px;
+            z-index: 2001;
+            padding: 4px 0;
+        }
+        .nav-submenu-wrapper:hover .submenu {
+            display: block;
+        }
+        .has-submenu { position: relative; }
+        .checkmark-space { display: inline-block; width: 1.5em; text-align: center; font-size: 0.85rem; }
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -259,13 +326,122 @@
 <body>
     <nav>
         <div class="nav-links">
-            <a href="/">File</a>
-            <a href="/" onclick="event.preventDefault(); if(typeof showSystemPrefs==='function'){showSystemPrefs();}else{window.location='/';}">Configure</a>
-            <a href="#">Edit</a>
-            <a href="#">Game Control</a>
-            <a href="#">View</a>
-            <a href="#">Webcast</a>
-            <a href="#">Help</a>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('file-dropdown');">File</a>
+                <div id="file-dropdown" class="dropdown-menu">
+                    <button onclick="fileNewGame()"><span class="checkmark-space"></span>New Game...<span class="shortcut">Ctrl+N</span></button>
+                    <button onclick="fileOpenGame()"><span class="checkmark-space"></span>Open Game...<span class="shortcut">Ctrl+O</span></button>
+                    <button id="menu-close-game" onclick="fileCloseGame()" disabled><span class="checkmark-space"></span>Close Game</button>
+                    <div class="dropdown-divider"></div>
+                    <button id="menu-print-ingame" disabled><span class="checkmark-space"></span>Print In Game...<span class="shortcut">Ctrl+I</span></button>
+                    <button id="menu-print-spray" disabled><span class="checkmark-space"></span>Print Spray Chart...<span class="shortcut">Ctrl+S</span></button>
+                    <button onclick="filePrintSeason()"><span class="checkmark-space"></span>Print Season...<span class="shortcut">Ctrl+P</span></button>
+                    <button onclick="filePrintCareer()"><span class="checkmark-space"></span>Print Career...</button>
+                    <div class="dropdown-divider"></div>
+                    <button onclick="fileImportGame()"><span class="checkmark-space"></span>Import Game...</button>
+                    <button onclick="fileExportGame()"><span class="checkmark-space"></span>Export Game...</button>
+                    <button onclick="fileExportSeason()"><span class="checkmark-space"></span>Export Season To Date...</button>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('configure-dropdown');">Configure</a>
+                <div id="configure-dropdown" class="dropdown-menu">
+                    <button onclick="closeAllDropdowns(); if(typeof showSystemPrefs==='function'){showSystemPrefs();}"><span class="checkmark-space"></span>Season and System Preferences...</button>
+                    <button onclick="closeAllDropdowns(); alert('Rules Configuration - Coming soon.');"><span class="checkmark-space"></span>Rules Configuration...</button>
+                    <div class="dropdown-divider"></div>
+                    <button onclick="closeAllDropdowns(); if(typeof showTeamConfigure==='function'){showTeamConfigure();}"><span class="checkmark-space"></span>Teams...</button>
+                    <button onclick="closeAllDropdowns(); if(typeof showRosterConfigure==='function'){showRosterConfigure();}"><span class="checkmark-space"></span>Rosters...</button>
+                    <button onclick="closeAllDropdowns(); if(typeof showGameConfigure==='function'){showGameConfigure();}"><span class="checkmark-space"></span>Games...</button>
+                    <button onclick="closeAllDropdowns(); alert('Conferences - Coming soon.');"><span class="checkmark-space"></span>Conferences...</button>
+                    <div class="dropdown-divider"></div>
+                    <button onclick="closeAllDropdowns(); alert('Configurations - Coming soon.');"><span class="checkmark-space"></span>Configurations...</button>
+                    <button onclick="closeAllDropdowns(); alert('Batter Text - Coming soon.');"><span class="checkmark-space"></span>Batter Text...</button>
+                    <button onclick="closeAllDropdowns(); alert('Scoring Text - Coming soon.');"><span class="checkmark-space"></span>Scoring Text...</button>
+                    <button onclick="closeAllDropdowns(); alert('Play Entry Button Colors - Coming soon.');"><span class="checkmark-space"></span>Play Entry Button Colors...</button>
+                    <button onclick="closeAllDropdowns(); alert('Output Season Xml - Coming soon.');"><span class="checkmark-space"></span>Output Season Xml</button>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('edit-dropdown');">Edit</a>
+                <div id="edit-dropdown" class="dropdown-menu edit-menu-items">
+                    <button disabled><span class="checkmark-space"></span>Edit Pitch Count</button>
+                    <button disabled><span class="checkmark-space"></span>Edit Game Stats</button>
+                    <button disabled><span class="checkmark-space"></span>Insert Ball</button>
+                    <button disabled><span class="checkmark-space"></span>Add Ball</button>
+                    <button disabled><span class="checkmark-space"></span>Insert Decrement Ball</button>
+                    <button disabled><span class="checkmark-space"></span>Add Decrement Ball</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Insert Strike</button>
+                    <button disabled><span class="checkmark-space"></span>Add Strike</button>
+                    <button disabled><span class="checkmark-space"></span>Insert Decrement Strike</button>
+                    <button disabled><span class="checkmark-space"></span>Add Decrement Strike</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Delete Ball/Strike</button>
+                    <button disabled><span class="checkmark-space"></span>Delete Last Play</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Insert Home Substitution</button>
+                    <button disabled><span class="checkmark-space"></span>Insert Visitor Substitution</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Add/Edit Play Commentary...</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Error Check</button>
+                    <button disabled><span class="checkmark-space"></span>Rebuild Stats</button>
+                    <button disabled><span class="checkmark-space"></span>Restart From</button>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('gamecontrol-dropdown');">Game Control</a>
+                <div id="gamecontrol-dropdown" class="dropdown-menu gamecontrol-menu-items">
+                    <button disabled><span class="checkmark-space"></span>Game Finished...</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Winner/Loser/Save</button>
+                    <button disabled><span class="checkmark-space"></span>Balance...</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Export game as XML file</button>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('view-dropdown');">View</a>
+                <div id="view-dropdown" class="dropdown-menu view-menu-items">
+                    <button disabled><span class="checkmark-space"></span>Play by Play</button>
+                    <button disabled><span class="checkmark-space"></span>Box Score by Inning</button>
+                    <button disabled><span class="checkmark-space"></span>Box Score by Game</button>
+                    <div class="dropdown-divider"></div>
+                    <button disabled><span class="checkmark-space"></span>Home Team Only<span class="shortcut">F10</span></button>
+                    <button disabled><span class="checkmark-space"></span>Visiting Team Only<span class="shortcut">F11</span></button>
+                    <button disabled><span class="checkmark-space"></span>Both Teams<span class="shortcut">F12</span></button>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('livestats-dropdown');">Live Stats</a>
+                <div id="livestats-dropdown" class="dropdown-menu">
+                    <button onclick="toggleCheckmark(this)" disabled><span class="checkmark-space"></span>Start</button>
+                    <button onclick="toggleCheckmark(this)" disabled><span class="checkmark-space"></span>Stop</button>
+                    <button onclick="toggleCheckmark(this)" disabled><span class="checkmark-space"></span>Restart</button>
+                    <div class="dropdown-divider"></div>
+                    <button onclick="closeAllDropdowns(); alert('Live Stats Configure - Coming soon.');"><span class="checkmark-space"></span>Configure...</button>
+                    <button onclick="toggleCheckmark(this)"><span class="checkmark-space"></span>Auto Start</button>
+                    <button onclick="toggleCheckmark(this)"><span class="checkmark-space"></span>Log</button>
+                    <div class="dropdown-divider"></div>
+                    <button onclick="closeAllDropdowns(); alert('Build Index - Coming soon.');"><span class="checkmark-space"></span>Build Index...</button>
+                    <button disabled><span class="checkmark-space"></span>Final Upload</button>
+                    <div class="nav-submenu-wrapper">
+                        <button class="has-submenu"><span class="checkmark-space"></span>Game Status<span class="shortcut">&#9654;</span></button>
+                        <div class="submenu">
+                            <button onclick="setGameStatus('in_progress')"><span class="checkmark-space"></span>In Progress</button>
+                            <button onclick="setGameStatus('pregame')"><span class="checkmark-space"></span>Pregame</button>
+                            <button onclick="setGameStatus('delayed')"><span class="checkmark-space"></span>Delayed</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <a href="#" onclick="event.preventDefault(); toggleDropdown('help-dropdown');">Help</a>
+                <div id="help-dropdown" class="dropdown-menu">
+                    <button onclick="closeAllDropdowns(); alert('Users Manual - Coming soon.');"><span class="checkmark-space"></span>View Users Manual</button>
+                    <button onclick="closeAllDropdowns(); alert('Gameday Stats Baseball\nVersion 1.0');"><span class="checkmark-space"></span>About Gameday Stats Baseball</button>
+                </div>
+            </div>
         </div>
     </nav>
 
@@ -279,9 +455,116 @@
         {% block content %}{% endblock %}
     </div>
 
-    <footer>Baseball/Softball Stats Tracker</footer>
+    <footer>Gameday Stats Baseball</footer>
 
     <script>
+        // ── Dropdown menu ────────────────────────────────────────────────
+        function toggleDropdown(id) {
+            var menu = document.getElementById(id);
+            var isOpen = menu.classList.contains('open');
+            closeAllDropdowns();
+            if (!isOpen) menu.classList.add('open');
+        }
+
+        function closeAllDropdowns() {
+            document.querySelectorAll('.dropdown-menu').forEach(function(m) {
+                m.classList.remove('open');
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.nav-dropdown')) {
+                closeAllDropdowns();
+            }
+        });
+
+        // ── File menu actions ────────────────────────────────────────────
+        var gameIsOpen = false;
+
+        function fileNewGame() {
+            closeAllDropdowns();
+            if (typeof showGameConfigure === 'function') showGameConfigure();
+        }
+
+        function fileOpenGame() {
+            closeAllDropdowns();
+            // If on home page with a game selected, open it
+            if (typeof selectedScheduleGameUrl !== 'undefined' && selectedScheduleGameUrl) {
+                window.location.href = selectedScheduleGameUrl;
+            } else if (typeof openSelectedGame === 'function') {
+                openSelectedGame();
+            } else {
+                // If on a game page or elsewhere, go home to pick a game
+                window.location.href = '/';
+            }
+        }
+
+        function fileCloseGame() {
+            closeAllDropdowns();
+            gameIsOpen = false;
+            updateFileMenuState();
+            window.location.href = '/';
+        }
+
+        function filePrintSeason() { closeAllDropdowns(); window.print(); }
+        function filePrintCareer() { closeAllDropdowns(); window.print(); }
+        function fileImportGame() { closeAllDropdowns(); alert('Import Game - Coming soon.'); }
+        function fileExportGame() { closeAllDropdowns(); alert('Export Game - Coming soon.'); }
+        function fileExportSeason() { closeAllDropdowns(); alert('Export Season To Date - Coming soon.'); }
+
+        function updateFileMenuState() {
+            var closeBtn = document.getElementById('menu-close-game');
+            var printInGame = document.getElementById('menu-print-ingame');
+            var printSpray = document.getElementById('menu-print-spray');
+            if (closeBtn) closeBtn.disabled = !gameIsOpen;
+            if (printInGame) printInGame.disabled = !gameIsOpen;
+            if (printSpray) printSpray.disabled = !gameIsOpen;
+            // Enable/disable all Edit, Game Control, and View menu items
+            document.querySelectorAll('.edit-menu-items button, .gamecontrol-menu-items button, .view-menu-items button').forEach(function(btn) {
+                btn.disabled = !gameIsOpen;
+            });
+        }
+
+        // ── Keyboard shortcuts ───────────────────────────────────────────
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key.toLowerCase()) {
+                    case 'n':
+                        e.preventDefault();
+                        fileNewGame();
+                        break;
+                    case 'o':
+                        e.preventDefault();
+                        fileOpenGame();
+                        break;
+                    case 'i':
+                        e.preventDefault();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        break;
+                    case 'p':
+                        e.preventDefault();
+                        filePrintSeason();
+                        break;
+                }
+            }
+        });
+
+        function toggleCheckmark(btn) {
+            var span = btn.querySelector('.checkmark-space');
+            if (span.textContent.trim() === '✓') {
+                span.textContent = '';
+            } else {
+                span.textContent = '✓';
+            }
+        }
+
+        function setGameStatus(status) {
+            closeAllDropdowns();
+        }
+
         function showTab(tabGroup, tabName) {
             document.querySelectorAll(`.tab-content[data-group="${tabGroup}"]`).forEach(el => {
                 el.classList.remove('active');

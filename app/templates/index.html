@@ -20,39 +20,39 @@
     <select id="team-select" style="width: 300px; height: 36px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem;" disabled onchange="onTeamChange(this.value)">
         <option value="">Select a season first...</option>
     </select>
-    <button class="btn" style="height: 36px; line-height: 36px; padding: 0 1.25rem; box-sizing: border-box;" onclick="showTeamConfigure()" id="btn-team-configure" disabled>Configure</button>
+    <button class="btn" style="height: 36px; line-height: 36px; padding: 0 1.25rem; box-sizing: border-box;" onclick="showTeamConfigure()" id="btn-team-configure">Configure</button>
 </div>
 
 <!-- Roster & Schedule Section -->
 <div style="display: flex; gap: 1.25rem;">
     <!-- Left Column: Roster -->
-    <div class="card" style="flex: 1;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; height: 450px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-shrink: 0;">
             <h2 style="margin-bottom: 0;">Roster:</h2>
             <span id="roster-count" style="color: var(--text-light); font-size: 0.9rem;">(0 Players)</span>
         </div>
-        <div id="roster-list">
+        <div id="roster-list" style="flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem;">
             <p style="color: var(--text-light); font-size: 0.9rem;">Select a team to view roster.</p>
         </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-            <button class="btn" onclick="showRosterConfigure()" id="btn-roster-configure" disabled>Configure</button>
-            <button class="btn accent" id="btn-download-roster" disabled>Download Roster</button>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-shrink: 0;">
+            <button class="btn" onclick="showRosterConfigure()" id="btn-roster-configure">Configure</button>
+            <button class="btn accent" id="btn-download-roster">Download Roster</button>
         </div>
     </div>
 
     <!-- Right Column: Schedule -->
-    <div class="card" style="flex: 1;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+    <div class="card" style="flex: 1; display: flex; flex-direction: column; height: 450px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-shrink: 0;">
             <h2 style="margin-bottom: 0;">Schedule:</h2>
             <span id="schedule-count" style="color: var(--text-light); font-size: 0.9rem;">(0 Competitions)</span>
         </div>
-        <div id="schedule-list">
+        <div id="schedule-list" style="flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem;">
             <p style="color: var(--text-light); font-size: 0.9rem;">Select a season to view schedule.</p>
         </div>
-        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
-            <button class="btn" id="btn-schedule-open" disabled>Open</button>
-            <button class="btn" id="btn-schedule-configure" disabled>Configure</button>
-            <button class="btn accent" id="btn-schedule-add" disabled>Add New</button>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-shrink: 0;">
+            <button class="btn" id="btn-schedule-open" onclick="openSelectedGame()">Open</button>
+            <button class="btn" id="btn-schedule-configure" onclick="openScheduleGameConfigure()">Configure</button>
+            <button class="btn accent" id="btn-schedule-add" onclick="showGameConfigure()">Add New</button>
         </div>
     </div>
 </div>
@@ -72,10 +72,10 @@
 
         <!-- Seasons Tab -->
         <div id="prefs-seasons" class="tab-content active" data-group="prefs">
-            <div style="display: flex; gap: 1.25rem; min-height: 250px;">
-                <div style="flex: 1; border-right: 1px solid var(--border); padding-right: 1.25rem;">
-                    <h3 style="margin-bottom: 0.75rem;">Seasons</h3>
-                    <div id="season-list" style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="display: flex; gap: 1.25rem; height: 350px;">
+                <div style="flex: 1; border-right: 1px solid var(--border); padding-right: 1.25rem; display: flex; flex-direction: column;">
+                    <h3 style="margin-bottom: 0.75rem; flex-shrink: 0;">Seasons</h3>
+                    <div id="season-list" style="display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 2px;">
                         {% if seasons %}
                             {% for season in seasons %}
                             <div class="season-item {% if loop.first %}selected{% endif %}"
@@ -86,7 +86,7 @@
                             </div>
                             {% endfor %}
                         {% else %}
-                            <p style="color: var(--text-light); font-size: 0.9rem;">No seasons yet.</p>
+                            <p style="color: var(--text-light); font-size: 0.9rem; padding: 0.5rem;">No seasons yet.</p>
                         {% endif %}
                     </div>
                 </div>
@@ -211,17 +211,17 @@
 <div id="team-configure-modal" class="modal-overlay" style="display: none;">
     <div class="modal-box" style="width: 850px;">
         <h2>Team Configuration</h2>
-        <div style="display: flex; gap: 1.25rem;">
+        <div style="display: flex; gap: 1.25rem; height: 400px;">
             <!-- Left Column: Season dropdown + team list -->
-            <div style="width: 50%; border-right: 1px solid var(--border); padding-right: 1.25rem;">
-                <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.25rem;">First Select Season then choose the team:</label>
-                <select id="team-cfg-season" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; margin-bottom: 0.75rem;" onchange="onTeamCfgSeasonChange(this.value)">
+            <div style="width: 50%; border-right: 1px solid var(--border); padding-right: 1.25rem; display: flex; flex-direction: column;">
+                <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 0.25rem; flex-shrink: 0;">First Select Season then choose the team:</label>
+                <select id="team-cfg-season" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; margin-bottom: 0.75rem; flex-shrink: 0;" onchange="onTeamCfgSeasonChange(this.value)">
                     {% for season in seasons %}
                     <option value="{{ season.id }}">{{ season.name }}</option>
                     {% endfor %}
                 </select>
-                <div id="team-cfg-list" style="display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto;">
-                    <p style="color: var(--text-light); font-size: 0.85rem;">Loading...</p>
+                <div id="team-cfg-list" style="display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 2px;">
+                    <p style="color: var(--text-light); font-size: 0.85rem; padding: 0.5rem;">Loading...</p>
                 </div>
             </div>
 
@@ -238,31 +238,344 @@
                     <div class="tcf-row"><label class="tcf-label">Mascot:</label><input type="text" name="mascot" id="tcf-mascot" class="tcf-input"></div>
                     <div class="tcf-row"><label class="tcf-label">Print Name:</label><input type="text" name="print_name" id="tcf-print-name" class="tcf-input"></div>
                     <div class="tcf-row"><label class="tcf-label">Abbreviation:</label><input type="text" name="abbreviation" id="tcf-abbreviation" class="tcf-input"></div>
-                    <div class="tcf-row"><label class="tcf-label">League:</label><input type="text" name="league" id="tcf-league" class="tcf-input"><label class="tcf-label" style="min-width: auto; margin-left: 0.25rem;">Division:</label><input type="text" name="division" id="tcf-division" class="tcf-input"></div>
+                    <div class="tcf-row"><label class="tcf-label">League:</label><input type="text" name="league" id="tcf-league" class="tcf-input" style="flex: 1; min-width: 0;"><label style="font-size: 0.85rem; font-weight: 600; white-space: nowrap; margin: 0 0.4rem;">Division:</label><input type="text" name="division" id="tcf-division" class="tcf-input" style="flex: 1; min-width: 0;"></div>
                     <div class="tcf-row"><label class="tcf-label">Coach:</label><input type="text" name="coach" id="tcf-coach" class="tcf-input"></div>
                     <div class="tcf-row"><label class="tcf-label">Conference:</label><input type="text" name="conference" id="tcf-conference" class="tcf-input"></div>
                     <input type="hidden" name="code" id="tcf-code">
                 </form>
             </div>
         </div>
-        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
-            <button class="btn" onclick="teamCfgNew()">Add New</button>
-            <button class="btn" style="background: var(--error);" onclick="teamCfgDelete()">Delete</button>
-            <button class="btn" onclick="teamCfgSave()">Save</button>
-            <button class="btn" style="background: var(--text-light);" onclick="teamCfgCancel()">Cancel</button>
-            <button class="btn" style="background: var(--text-light);" onclick="hideTeamModal()">Close</button>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="btn" style="flex: 1;" onclick="teamCfgNew()">Add New</button>
+            <button class="btn" style="flex: 1; background: var(--error);" onclick="teamCfgDelete()">Delete</button>
+            <button class="btn" style="flex: 1;" onclick="teamCfgSave()">Save</button>
+            <button class="btn" style="flex: 1; background: var(--text-light);" onclick="teamCfgCancel()">Cancel</button>
+            <button class="btn" style="flex: 1; background: var(--text-light);" onclick="hideTeamModal()">Close</button>
         </div>
     </div>
 </div>
 
 <!-- Roster Configure Modal -->
 <div id="roster-configure-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-box">
+    <div class="modal-box" style="width: 850px;">
         <h2>Roster Configuration</h2>
-        <div id="roster-config-content"></div>
-        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
-            <button class="btn" onclick="hideRosterModal()">OK</button>
-            <button class="btn" style="background: var(--text-light);" onclick="hideRosterModal()">Cancel</button>
+        <div style="display: flex; gap: 1.25rem; height: 400px;">
+            <!-- Left Column: Player list -->
+            <div style="width: 50%; border-right: 1px solid var(--border); padding-right: 1.25rem; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-shrink: 0;">
+                    <label style="font-weight: 600; font-size: 0.85rem;">Select Player:</label>
+                    <span id="roster-cfg-count" style="font-size: 0.85rem; color: var(--text-light);">0 Players Listed</span>
+                </div>
+                <div id="roster-cfg-list" style="display: flex; flex-direction: column; gap: 0; flex: 1; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;">
+                    <p style="color: var(--text-light); font-size: 0.85rem; padding: 0.5rem;">Select a team to view players.</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; flex-shrink: 0;">
+                    <div style="display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden;">
+                        <button class="roster-sort-btn active" id="btn-sort-jersey" onclick="rosterCfgSort('jersey')" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer; background: var(--primary); color: white;">Jersey Order</button>
+                        <button class="roster-sort-btn" id="btn-sort-name" onclick="rosterCfgSort('name')" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; border: none; border-left: 1px solid var(--border); cursor: pointer; background: white; color: var(--text);">Name Order</button>
+                    </div>
+                    <button class="btn" style="font-size: 0.8rem; padding: 0.35rem 0.75rem; margin-left: auto;" onclick="rosterCfgPrint()">Print Roster</button>
+                </div>
+            </div>
+
+            <!-- Right Column: Season/Team dropdowns + Player detail form -->
+            <div style="width: 50%;">
+                <form id="roster-cfg-form">
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Season:</label>
+                            <select id="roster-cfg-season" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;" onchange="onRosterCfgSeasonChange(this.value)">
+                                {% for season in seasons %}
+                                <option value="{{ season.id }}">{{ season.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Team:</label>
+                            <select id="roster-cfg-team" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;" onchange="onRosterCfgTeamChange(this.value)">
+                                <option value="">Select a team...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; white-space: nowrap;">Player Number:</label>
+                        <input type="text" id="rcf-number" maxlength="2" style="width: 50px; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                        <input type="checkbox" id="rcf-disabled" style="margin-left: auto;">
+                        <label for="rcf-disabled" style="font-size: 0.85rem; font-weight: 600; white-space: nowrap;">Disable Player</label>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Player First Name:</label>
+                            <input type="text" id="rcf-first-name" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Player Last Name:</label>
+                            <input type="text" id="rcf-last-name" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Position:</label>
+                            <select id="rcf-position" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                                <option value="">--</option>
+                                <option value="P">Pitcher</option>
+                                <option value="C">Catcher</option>
+                                <option value="1B">First Base</option>
+                                <option value="2B">Second Base</option>
+                                <option value="3B">Third Base</option>
+                                <option value="SS">Short Stop</option>
+                                <option value="LF">Left Field</option>
+                                <option value="CF">Center Field</option>
+                                <option value="RF">Right Field</option>
+                                <option value="EF">Extra Fielder</option>
+                                <option value="PR">Pinch Runner</option>
+                                <option value="DH">Designated Hitter</option>
+                                <option value="DP">Designated Player</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Year:</label>
+                            <input type="text" id="rcf-year" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Height:</label>
+                            <input type="text" id="rcf-height" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Weight:</label>
+                            <input type="text" id="rcf-weight" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Hometown:</label>
+                        <input type="text" id="rcf-hometown" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Bats:</label>
+                            <select id="rcf-bats" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                                <option value="">--</option>
+                                <option value="Right">Right</option>
+                                <option value="Left">Left</option>
+                                <option value="Switch">Switch</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Throws:</label>
+                            <select id="rcf-throws" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                                <option value="">--</option>
+                                <option value="Right">Right</option>
+                                <option value="Left">Left</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="hidden" id="rcf-player-id">
+                </form>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="btn" style="flex: 1;" onclick="rosterCfgNew()">Add New</button>
+            <button class="btn" style="flex: 1; background: var(--error);" onclick="rosterCfgDelete()">Delete</button>
+            <button class="btn" style="flex: 1;" onclick="rosterCfgSave()">Save</button>
+            <button class="btn" style="flex: 1; background: var(--text-light);" onclick="rosterCfgCancel()">Cancel</button>
+            <button class="btn" style="flex: 1; background: var(--text-light);" onclick="hideRosterModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Game Configuration Modal -->
+<div id="game-configure-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-box" style="width: 950px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+        <h2>Game Configuration</h2>
+        <div style="border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.75rem; font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem;">Game Information</h3>
+            <div style="display: flex; gap: 1.25rem;">
+                <!-- Left side -->
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Season:</label>
+                        <select id="gcf-season" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;" onchange="onGameCfgSeasonChange(this.value)">
+                            {% for season in seasons %}
+                            <option value="{{ season.id }}">{{ season.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Game:</label>
+                        <select id="gcf-game" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;" onchange="onGameCfgGameChange(this.value)">
+                            <option value="">New Game</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Visiting Team:</label>
+                        <select id="gcf-visitor" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                            <option value="">Select a team...</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Home Team:</label>
+                        <select id="gcf-home" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;" onchange="onGameCfgHomeChange(this.value)">
+                            <option value="">Select a team...</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="min-width: 110px;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem; white-space: nowrap;">Start Time:</label>
+                            <input type="time" id="gcf-start-time" style="width: 100%; height: 30px; padding: 0 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                        </div>
+                        <div style="min-width: 110px;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem; white-space: nowrap;">Total Time (H:MM):</label>
+                            <input type="text" id="gcf-duration" placeholder="0:00" maxlength="4" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;" oninput="formatHMM(this)">
+                        </div>
+                        <div style="min-width: 130px;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem; white-space: nowrap;">Delayed Time (H:MM):</label>
+                            <input type="text" id="gcf-delayed" placeholder="0:00" maxlength="4" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;" oninput="formatHMM(this)">
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Tournament:</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <select id="gcf-tournament" style="flex: 1; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                                <option value="">None</option>
+                            </select>
+                            <button class="btn" style="font-size: 0.8rem; padding: 0.35rem 0.75rem; white-space: nowrap;" onclick="gameCfgNewTournament()">New</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Right side -->
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Entry Mode:</label>
+                        <select id="gcf-entry-mode" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                            <option value="box_game_totals">Box Score: Game Totals</option>
+                            <option value="box_inning_by_inning">Box Score: Inning by Inning</option>
+                            <option value="pbp_simple">Play-by-Play: Simple Mode</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Date:</label>
+                        <input type="date" id="gcf-date" style="width: 100%; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Visitor Record:</label>
+                            <input type="text" id="gcf-visitor-record" placeholder="0-0" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Conf Record:</label>
+                            <input type="text" id="gcf-visitor-conf" placeholder="0-0" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Home Record:</label>
+                            <input type="text" id="gcf-home-record" placeholder="0-0" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Conf Record:</label>
+                            <input type="text" id="gcf-home-conf" placeholder="0-0" style="width: 100%; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem;">
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;"># of Innings:</label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="btn" style="font-size: 0.85rem; padding: 0.2rem 0.6rem; line-height: 1;" onclick="gameCfgInnings(-1)">-</button>
+                            <input type="number" id="gcf-innings" value="7" min="1" max="15" style="width: 50px; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; text-align: center;">
+                            <button class="btn" style="font-size: 0.85rem; padding: 0.2rem 0.6rem; line-height: 1;" onclick="gameCfgInnings(1)">+</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Location Information Section -->
+        <div style="border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.75rem; font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem;">Location Information</h3>
+            <div style="display: flex; gap: 1.25rem;">
+                <!-- Left column -->
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Stadium:</label>
+                        <input type="text" id="gcf-stadium" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">City:</label>
+                        <input type="text" id="gcf-city" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">State:</label>
+                        <input type="text" id="gcf-state" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Weather:</label>
+                        <input type="text" id="gcf-weather" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                    </div>
+                </div>
+                <!-- Middle column -->
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Attendance:</label>
+                        <input type="text" id="gcf-attendance" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Doubleheader Game #:</label>
+                        <select id="gcf-doubleheader" style="width: 100%; height: 30px; padding: 0 0.35rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Scorer:</label>
+                        <input type="text" id="gcf-scorer" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                    </div>
+                </div>
+                <!-- Right column: checkboxes -->
+                <div style="flex: 1;">
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" id="gcf-chk-conference"> Conference</label>
+                        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" id="gcf-chk-neutral"> Neutral</label>
+                        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" id="gcf-chk-exhibition"> Exhibition</label>
+                        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" id="gcf-chk-region"> Region</label>
+                        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" id="gcf-chk-conf-division"> Conference Division</label>
+                        <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem;"><input type="checkbox" id="gcf-chk-night"> Night Game</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Officials Section -->
+        <div style="border: 1px solid var(--border); border-radius: 6px; padding: 1rem; margin-bottom: 1rem;">
+            <h3 style="margin-bottom: 0.75rem; font-size: 0.95rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem;">Officials</h3>
+            <div style="display: flex; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Home Plate:</label>
+                    <input type="text" id="gcf-ump-hp" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">1st Base:</label>
+                    <input type="text" id="gcf-ump-1b" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">2nd Base:</label>
+                    <input type="text" id="gcf-ump-2b" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">3rd Base:</label>
+                    <input type="text" id="gcf-ump-3b" style="width: 100%; height: 30px; padding: 0 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box;">
+                </div>
+            </div>
+            <div>
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.25rem;">Game Notes:</label>
+                <textarea id="gcf-notes" rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; box-sizing: border-box; resize: vertical;"></textarea>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="btn" style="flex: 1;" onclick="gameCfgSave()">Save</button>
+            <button class="btn" style="flex: 1; background: var(--text-light);" onclick="hideGameModal()">Cancel</button>
+            <button class="btn" style="flex: 1; background: var(--text-light);" onclick="hideGameModal()">Close</button>
         </div>
     </div>
 </div>
@@ -324,6 +637,10 @@
         border-radius: 4px;
         font-size: 0.85rem;
     }
+    .schedule-row.selected td {
+        background: var(--primary) !important;
+        color: white !important;
+    }
     .team-row {
         display: flex;
         align-items: center;
@@ -337,6 +654,8 @@
 <script>
 var currentSeasonId = null;
 var currentTeamId = null;
+var selectedScheduleGameId = null;
+var selectedScheduleGameUrl = null;
 var teamsData = [];
 var selectedPrefSeasonId = {{ seasons[0].id if seasons else 'null' }};
 
@@ -346,28 +665,17 @@ function onSeasonChange(seasonId) {
     currentSeasonId = seasonId;
     currentTeamId = null;
     var teamSelect = document.getElementById('team-select');
-    var btnTeamConfigure = document.getElementById('btn-team-configure');
-    var btnRosterConfigure = document.getElementById('btn-roster-configure');
-    var btnDownload = document.getElementById('btn-download-roster');
 
     if (!seasonId) {
         teamSelect.innerHTML = '<option value="">Select a season first...</option>';
         teamSelect.disabled = true;
-        btnTeamConfigure.disabled = true;
         return;
     }
 
     loadTeams(seasonId);
     loadSchedule(seasonId);
-    btnTeamConfigure.disabled = false;
-    btnRosterConfigure.disabled = true;
-    btnDownload.disabled = true;
-    document.getElementById('btn-schedule-open').disabled = false;
-    document.getElementById('btn-schedule-configure').disabled = false;
-    document.getElementById('btn-schedule-add').disabled = false;
     document.getElementById('roster-list').innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Select a team to view roster.</p>';
     document.getElementById('roster-count').textContent = '(0 Players)';
-    document.getElementById('schedule-list').innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Select a season to view schedule.</p>';
 }
 
 function loadTeams(seasonId) {
@@ -396,11 +704,6 @@ function loadTeams(seasonId) {
 function onTeamChange(teamId) {
     if (!teamId) return;
     currentTeamId = teamId;
-    document.getElementById('btn-roster-configure').disabled = false;
-    document.getElementById('btn-download-roster').disabled = false;
-    document.getElementById('btn-schedule-open').disabled = false;
-    document.getElementById('btn-schedule-configure').disabled = false;
-    document.getElementById('btn-schedule-add').disabled = false;
     loadRoster(teamId);
 }
 
@@ -418,14 +721,12 @@ function loadRoster(teamId) {
                 return;
             }
             var html = '<div class="table-responsive"><table>';
-            html += '<thead><tr><th style="width:15%">#</th><th style="width:45%">Name</th><th>B/T</th><th>Cl</th></tr></thead>';
+            html += '<thead><tr><th style="width:60px;">#</th><th>Name</th></tr></thead>';
             html += '<tbody>';
             players.forEach(function(p) {
                 html += '<tr>';
-                html += '<td>' + p.uniform_number + '</td>';
+                html += '<td>' + (p.uniform_number || '') + '</td>';
                 html += '<td><a href="/player/' + p.id + '" class="player-link">' + p.name + '</a></td>';
-                html += '<td>' + (p.bats && p.throws ? p.bats + '/' + p.throws : '') + '</td>';
-                html += '<td>' + p.player_class + '</td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
@@ -446,21 +747,67 @@ function loadSchedule(seasonId) {
                 scheduleList.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">No games scheduled.</p>';
                 return;
             }
+            selectedScheduleGameId = null;
+            selectedScheduleGameUrl = null;
             var html = '<div class="table-responsive"><table>';
-            html += '<thead><tr><th>Date</th><th>Visitor</th><th></th><th>Home</th><th>Score</th></tr></thead>';
+            html += '<thead><tr><th>Date</th><th>Visitor</th><th></th><th>Home</th><th>Status</th></tr></thead>';
             html += '<tbody>';
             games.forEach(function(g) {
-                html += '<tr>';
+                var status;
+                if (g.is_complete) {
+                    status = g.score;
+                } else if (g.score && g.score !== '0-0') {
+                    status = 'Incomplete';
+                } else {
+                    status = 'Not Started';
+                }
+                var gameUrl = g.url || '';
+                html += '<tr class="schedule-row" data-game-id="' + g.id + '" data-game-url="' + gameUrl + '" onclick="selectScheduleGame(this, ' + g.id + ', \'' + gameUrl + '\')" ondblclick="window.location.href=\'' + gameUrl + '\'" style="cursor: pointer;">';
                 html += '<td>' + g.date + '</td>';
                 html += '<td>' + g.visitor + '</td>';
                 html += '<td style="text-align:center;">@</td>';
                 html += '<td>' + g.home + '</td>';
-                html += '<td>' + (g.is_complete ? g.score : '--') + '</td>';
+                html += '<td>' + status + '</td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
             scheduleList.innerHTML = html;
         });
+}
+
+// ── Schedule game selection ──────────────────────────────────────────
+
+function selectScheduleGame(el, gameId, gameUrl) {
+    document.querySelectorAll('.schedule-row').forEach(function(row) {
+        row.classList.remove('selected');
+    });
+    el.classList.add('selected');
+    selectedScheduleGameId = gameId;
+    selectedScheduleGameUrl = gameUrl;
+}
+
+function openSelectedGame() {
+    if (!selectedScheduleGameUrl) {
+        alert('Select a game first.');
+        return;
+    }
+    window.location.href = selectedScheduleGameUrl;
+}
+
+function openScheduleGameConfigure() {
+    if (!selectedScheduleGameId) {
+        showGameConfigure();
+        return;
+    }
+    document.getElementById('game-configure-modal').style.display = '';
+    var seasonSelect = document.getElementById('gcf-season');
+    if (currentSeasonId) seasonSelect.value = currentSeasonId;
+    onGameCfgSeasonChange(seasonSelect.value);
+    // Wait for teams/games to load, then select the game
+    setTimeout(function() {
+        document.getElementById('gcf-game').value = selectedScheduleGameId;
+        onGameCfgGameChange(selectedScheduleGameId);
+    }, 300);
 }
 
 // ── System Preferences modal ─────────────────────────────────────────
@@ -523,7 +870,13 @@ function showTeamConfigure() {
         seasonSelect.value = currentSeasonId;
     }
     teamCfgSeasonId = seasonSelect.value;
-    onTeamCfgSeasonChange(teamCfgSeasonId);
+    if (teamCfgSeasonId) {
+        onTeamCfgSeasonChange(teamCfgSeasonId);
+    } else {
+        teamCfgTeams = [];
+        teamCfgClearForm();
+        document.getElementById('team-cfg-list').innerHTML = '<p style="color: var(--text-light); font-size: 0.85rem;">Create a season first.</p>';
+    }
 }
 
 function onTeamCfgSeasonChange(seasonId) {
@@ -682,28 +1035,253 @@ function hideTeamModal() {
 
 // ── Roster Configure modal ───────────────────────────────────────────
 
-function showRosterConfigure() {
-    if (!currentTeamId) return;
-    var content = document.getElementById('roster-config-content');
-    content.innerHTML = '<p style="color: var(--text-light); font-size: 0.9rem;">Loading...</p>';
-    document.getElementById('roster-configure-modal').style.display = '';
+var rosterCfgPlayers = [];
+var rosterCfgSelectedId = null;
+var rosterCfgIsNew = false;
+var rosterCfgSortMode = 'jersey';
+var rosterCfgTeamId = null;
 
-    fetch('/api/teams/' + currentTeamId + '/players')
+function showRosterConfigure() {
+    document.getElementById('roster-configure-modal').style.display = '';
+    rosterCfgSortMode = 'jersey';
+    document.getElementById('btn-sort-jersey').style.background = 'var(--primary)';
+    document.getElementById('btn-sort-jersey').style.color = 'white';
+    document.getElementById('btn-sort-name').style.background = 'white';
+    document.getElementById('btn-sort-name').style.color = 'var(--text)';
+
+    // Set season dropdown, load teams
+    var seasonSelect = document.getElementById('roster-cfg-season');
+    if (currentSeasonId) {
+        seasonSelect.value = currentSeasonId;
+    }
+    onRosterCfgSeasonChange(seasonSelect.value);
+}
+
+function onRosterCfgSeasonChange(seasonId) {
+    var teamSelect = document.getElementById('roster-cfg-team');
+    rosterCfgTeamId = null;
+    rosterCfgPlayers = [];
+    rosterCfgSelectedId = null;
+    rosterCfgClearForm();
+    renderRosterCfgList();
+    document.getElementById('roster-cfg-count').textContent = '0 Players Listed';
+
+    if (!seasonId) {
+        teamSelect.innerHTML = '<option value="">Select a season first...</option>';
+        return;
+    }
+
+    fetch('/api/seasons/' + seasonId + '/teams')
+        .then(function(r) { return r.json(); })
+        .then(function(teams) {
+            teamSelect.innerHTML = '<option value="">Select a team...</option>';
+            teams.forEach(function(t) {
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                teamSelect.appendChild(opt);
+            });
+            // Auto-select current team if it's in this season
+            if (currentTeamId) {
+                var match = teams.find(function(t) { return t.id == currentTeamId; });
+                if (match) {
+                    teamSelect.value = currentTeamId;
+                    onRosterCfgTeamChange(currentTeamId);
+                }
+            }
+        });
+}
+
+function onRosterCfgTeamChange(teamId) {
+    rosterCfgTeamId = teamId;
+    rosterCfgSelectedId = null;
+    rosterCfgIsNew = false;
+    rosterCfgClearForm();
+    if (!teamId) {
+        rosterCfgPlayers = [];
+        renderRosterCfgList();
+        document.getElementById('roster-cfg-count').textContent = '0 Players Listed';
+        return;
+    }
+    rosterCfgLoadPlayers();
+}
+
+function rosterCfgLoadPlayers() {
+    if (!rosterCfgTeamId) return;
+    fetch('/api/teams/' + rosterCfgTeamId + '/players')
         .then(function(r) { return r.json(); })
         .then(function(players) {
-            var html = '<div>';
+            rosterCfgPlayers = players;
+            rosterCfgApplySort();
+            document.getElementById('roster-cfg-count').textContent = players.length + ' Players Listed';
             if (players.length > 0) {
-                players.forEach(function(p) {
-                    html += '<div class="team-row">';
-                    html += '<span>#' + p.uniform_number + ' ' + p.name + '</span>';
-                    html += '</div>';
-                });
+                rosterCfgSelect(players[0].id);
             } else {
-                html += '<p style="color: var(--text-light); font-size: 0.9rem;">No players on roster.</p>';
+                rosterCfgSelectedId = null;
+                rosterCfgClearForm();
+                renderRosterCfgList();
             }
-            html += '</div>';
-            content.innerHTML = html;
         });
+}
+
+function rosterCfgApplySort() {
+    if (rosterCfgSortMode === 'jersey') {
+        rosterCfgPlayers.sort(function(a, b) {
+            var na = parseInt(a.uniform_number) || 999;
+            var nb = parseInt(b.uniform_number) || 999;
+            return na - nb;
+        });
+    } else {
+        rosterCfgPlayers.sort(function(a, b) {
+            return a.name.localeCompare(b.name);
+        });
+    }
+}
+
+function renderRosterCfgList() {
+    var list = document.getElementById('roster-cfg-list');
+    if (rosterCfgPlayers.length === 0) {
+        list.innerHTML = '<p style="color: var(--text-light); font-size: 0.85rem; padding: 0.5rem;">No players on roster.</p>';
+        return;
+    }
+    var html = '<table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+    rosterCfgPlayers.forEach(function(p) {
+        var sel = p.id === rosterCfgSelectedId;
+        var bg = sel ? 'background: var(--primary); color: white;' : '';
+        html += '<tr class="roster-cfg-row" onclick="rosterCfgSelect(' + (typeof p.id === 'string' ? "'" + p.id + "'" : p.id) + ')" style="cursor: pointer; ' + bg + '">';
+        html += '<td style="padding: 0.35rem 0.6rem; width: 60px; border-bottom: 1px solid var(--border);' + (sel ? ' color: white;' : '') + '">' + (p.uniform_number || '') + '</td>';
+        html += '<td style="padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--border); text-align: left;' + (sel ? ' color: white;' : '') + '">' + p.name + '</td>';
+        html += '</tr>';
+    });
+    html += '</table>';
+    list.innerHTML = html;
+}
+
+function rosterCfgSelect(playerId) {
+    rosterCfgSelectedId = playerId;
+    if (playerId !== '_new') rosterCfgIsNew = false;
+    var player = rosterCfgPlayers.find(function(p) { return p.id === playerId; });
+    if (!player) return;
+    renderRosterCfgList();
+    document.getElementById('rcf-number').value = player.uniform_number || '';
+    document.getElementById('rcf-disabled').checked = player.disabled || false;
+    document.getElementById('rcf-first-name').value = player.first_name || '';
+    document.getElementById('rcf-last-name').value = player.last_name || '';
+    document.getElementById('rcf-position').value = player.position || '';
+    document.getElementById('rcf-year').value = player.year || '';
+    document.getElementById('rcf-height').value = player.height || '';
+    document.getElementById('rcf-weight').value = player.weight || '';
+    document.getElementById('rcf-hometown').value = player.hometown || '';
+    document.getElementById('rcf-bats').value = player.bats || '';
+    document.getElementById('rcf-throws').value = player.throws || '';
+    document.getElementById('rcf-player-id').value = player.id;
+}
+
+function rosterCfgClearForm() {
+    document.getElementById('rcf-number').value = '';
+    document.getElementById('rcf-disabled').checked = false;
+    document.getElementById('rcf-first-name').value = '';
+    document.getElementById('rcf-last-name').value = '';
+    document.getElementById('rcf-position').value = '';
+    document.getElementById('rcf-year').value = '';
+    document.getElementById('rcf-height').value = '';
+    document.getElementById('rcf-weight').value = '';
+    document.getElementById('rcf-hometown').value = '';
+    document.getElementById('rcf-bats').value = '';
+    document.getElementById('rcf-throws').value = '';
+    document.getElementById('rcf-player-id').value = '';
+}
+
+function rosterCfgNew() {
+    if (!rosterCfgTeamId) { alert('Select a team first.'); return; }
+    rosterCfgIsNew = true;
+    rosterCfgClearForm();
+    document.getElementById('rcf-first-name').value = 'New';
+    document.getElementById('rcf-last-name').value = 'Player';
+    rosterCfgPlayers = rosterCfgPlayers.filter(function(p) { return p.id !== '_new'; });
+    rosterCfgPlayers.push({id: '_new', name: 'New Player', first_name: 'New', last_name: 'Player', uniform_number: '', position: '', bats: '', throws: '', player_class: '', year: '', height: '', weight: '', hometown: '', disabled: false});
+    rosterCfgSelectedId = '_new';
+    renderRosterCfgList();
+    document.getElementById('roster-cfg-count').textContent = rosterCfgPlayers.length + ' Players Listed';
+    document.getElementById('rcf-first-name').focus();
+    document.getElementById('rcf-first-name').select();
+}
+
+function rosterCfgSave() {
+    var firstName = document.getElementById('rcf-first-name').value.trim();
+    var lastName = document.getElementById('rcf-last-name').value.trim();
+    if (!firstName && !lastName) return;
+    var name = (firstName + ' ' + lastName).trim();
+    var formData = new FormData();
+    formData.append('name', name);
+    formData.append('first_name', firstName);
+    formData.append('last_name', lastName);
+    formData.append('uniform_number', document.getElementById('rcf-number').value.trim());
+    formData.append('position', document.getElementById('rcf-position').value);
+    formData.append('bats', document.getElementById('rcf-bats').value);
+    formData.append('throws', document.getElementById('rcf-throws').value);
+    formData.append('year', document.getElementById('rcf-year').value.trim());
+    formData.append('height', document.getElementById('rcf-height').value.trim());
+    formData.append('weight', document.getElementById('rcf-weight').value.trim());
+    formData.append('hometown', document.getElementById('rcf-hometown').value.trim());
+    if (document.getElementById('rcf-disabled').checked) formData.append('disabled', 'on');
+
+    var url;
+    if (rosterCfgIsNew) {
+        url = '/configure/team/' + rosterCfgTeamId + '/player';
+    } else if (rosterCfgSelectedId && rosterCfgSelectedId !== '_new') {
+        url = '/configure/player/' + rosterCfgSelectedId + '/edit';
+    } else {
+        return;
+    }
+
+    fetch(url, { method: 'POST', body: formData })
+        .then(function() {
+            rosterCfgIsNew = false;
+            rosterCfgLoadPlayers();
+        });
+}
+
+function rosterCfgDelete() {
+    if (!rosterCfgSelectedId || rosterCfgSelectedId === '_new') return;
+    var player = rosterCfgPlayers.find(function(p) { return p.id === rosterCfgSelectedId; });
+    if (!player) return;
+    if (confirm('Delete player "' + player.name + '"?')) {
+        var formData = new FormData();
+        fetch('/configure/player/' + rosterCfgSelectedId + '/delete', { method: 'POST', body: formData })
+            .then(function() {
+                rosterCfgLoadPlayers();
+            });
+    }
+}
+
+function rosterCfgCancel() {
+    if (rosterCfgSelectedId && rosterCfgSelectedId !== '_new') {
+        rosterCfgSelect(rosterCfgSelectedId);
+    } else {
+        rosterCfgClearForm();
+    }
+}
+
+function rosterCfgSort(mode) {
+    rosterCfgSortMode = mode;
+    if (mode === 'jersey') {
+        document.getElementById('btn-sort-jersey').style.background = 'var(--primary)';
+        document.getElementById('btn-sort-jersey').style.color = 'white';
+        document.getElementById('btn-sort-name').style.background = 'white';
+        document.getElementById('btn-sort-name').style.color = 'var(--text)';
+    } else {
+        document.getElementById('btn-sort-name').style.background = 'var(--primary)';
+        document.getElementById('btn-sort-name').style.color = 'white';
+        document.getElementById('btn-sort-jersey').style.background = 'white';
+        document.getElementById('btn-sort-jersey').style.color = 'var(--text)';
+    }
+    rosterCfgApplySort();
+    renderRosterCfgList();
+}
+
+function rosterCfgPrint() {
+    window.print();
 }
 
 function hideRosterModal() {
@@ -719,6 +1297,196 @@ document.getElementById('team-cfg-form').addEventListener('keydown', function(e)
         teamCfgSave();
     }
 });
+
+document.getElementById('roster-cfg-form').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        rosterCfgSave();
+    }
+});
+
+// ── Game Configure modal ─────────────────────────────────────────────
+
+function formatHMM(el) {
+    // Allow only digits and colon, auto-insert colon after hours digit
+    var val = el.value.replace(/[^0-9:]/g, '');
+    // Remove extra colons
+    var parts = val.split(':');
+    if (parts.length > 2) val = parts[0] + ':' + parts.slice(1).join('');
+    // Clamp minutes to 59
+    if (parts.length === 2 && parts[1].length === 2) {
+        var mins = parseInt(parts[1]);
+        if (mins > 59) val = parts[0] + ':59';
+    }
+    el.value = val;
+}
+
+function showGameConfigure() {
+    document.getElementById('game-configure-modal').style.display = '';
+    gameCfgEditId = null;
+    var seasonSelect = document.getElementById('gcf-season');
+    if (currentSeasonId) seasonSelect.value = currentSeasonId;
+    onGameCfgSeasonChange(seasonSelect.value);
+    // Set today's date
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('gcf-date').value = today;
+    document.getElementById('gcf-innings').value = 7;
+    document.getElementById('gcf-start-time').value = '';
+    document.getElementById('gcf-duration').value = '';
+    document.getElementById('gcf-delayed').value = '';
+    document.getElementById('gcf-visitor-record').value = '';
+    document.getElementById('gcf-visitor-conf').value = '';
+    document.getElementById('gcf-home-record').value = '';
+    document.getElementById('gcf-home-conf').value = '';
+}
+
+var gameCfgEditId = null;
+var gameCfgTeams = [];
+
+function onGameCfgSeasonChange(seasonId) {
+    if (!seasonId) return;
+    gameCfgEditId = null;
+    // Load teams
+    fetch('/api/seasons/' + seasonId + '/teams')
+        .then(function(r) { return r.json(); })
+        .then(function(teams) {
+            gameCfgTeams = teams;
+            var visitorSel = document.getElementById('gcf-visitor');
+            var homeSel = document.getElementById('gcf-home');
+            var html = '<option value="">Select a team...</option>';
+            teams.forEach(function(t) {
+                html += '<option value="' + t.id + '">' + t.name + '</option>';
+            });
+            visitorSel.innerHTML = html;
+            homeSel.innerHTML = html;
+        });
+    // Load games for dropdown
+    fetch('/api/seasons/' + seasonId + '/games')
+        .then(function(r) { return r.json(); })
+        .then(function(games) {
+            var gameSel = document.getElementById('gcf-game');
+            var html = '<option value="">New Game</option>';
+            games.forEach(function(g) {
+                html += '<option value="' + g.id + '">' + g.date + ' - ' + g.visitor + ' @ ' + g.home + (g.is_complete ? ' (' + g.score + ')' : '') + '</option>';
+            });
+            gameSel.innerHTML = html;
+        });
+}
+
+function onGameCfgGameChange(gameId) {
+    if (!gameId) {
+        // New game mode — clear form
+        gameCfgEditId = null;
+        document.getElementById('gcf-visitor').value = '';
+        document.getElementById('gcf-home').value = '';
+        document.getElementById('gcf-start-time').value = '';
+        document.getElementById('gcf-duration').value = '';
+        document.getElementById('gcf-delayed').value = '';
+        document.getElementById('gcf-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('gcf-innings').value = 7;
+        document.getElementById('gcf-visitor-record').value = '';
+        document.getElementById('gcf-visitor-conf').value = '';
+        document.getElementById('gcf-home-record').value = '';
+        document.getElementById('gcf-home-conf').value = '';
+        return;
+    }
+    gameCfgEditId = gameId;
+    fetch('/api/games/' + gameId)
+        .then(function(r) { return r.json(); })
+        .then(function(g) {
+            document.getElementById('gcf-visitor').value = g.visitor_team_id || '';
+            document.getElementById('gcf-home').value = g.home_team_id || '';
+            document.getElementById('gcf-start-time').value = g.start_time || '';
+            document.getElementById('gcf-duration').value = g.duration || '';
+            document.getElementById('gcf-delayed').value = '';
+            document.getElementById('gcf-date').value = g.date || '';
+            document.getElementById('gcf-innings').value = g.scheduled_innings || 7;
+            document.getElementById('gcf-visitor-record').value = '';
+            document.getElementById('gcf-visitor-conf').value = '';
+            document.getElementById('gcf-home-record').value = '';
+            document.getElementById('gcf-home-conf').value = '';
+            document.getElementById('gcf-stadium').value = g.stadium || '';
+            document.getElementById('gcf-weather').value = g.weather || '';
+            document.getElementById('gcf-attendance').value = g.attendance || '';
+            document.getElementById('gcf-doubleheader').value = g.doubleheader || '0';
+            // Populate city/state from home team
+            var homeTeam = gameCfgTeams.find(function(t) { return t.id == g.home_team_id; });
+            if (homeTeam) {
+                document.getElementById('gcf-city').value = homeTeam.city || '';
+                document.getElementById('gcf-state').value = homeTeam.state || '';
+            }
+        });
+}
+
+function onGameCfgHomeChange(teamId) {
+    if (!teamId) return;
+    var team = gameCfgTeams.find(function(t) { return t.id == teamId; });
+    if (team) {
+        document.getElementById('gcf-stadium').value = team.stadium || '';
+        document.getElementById('gcf-city').value = team.city || '';
+        document.getElementById('gcf-state').value = team.state || '';
+    }
+}
+
+function gameCfgInnings(delta) {
+    var inp = document.getElementById('gcf-innings');
+    var val = parseInt(inp.value) + delta;
+    if (val < 1) val = 1;
+    if (val > 15) val = 15;
+    inp.value = val;
+}
+
+function gameCfgNewTournament() {
+    var name = prompt('Enter tournament name:');
+    if (name && name.trim()) {
+        var sel = document.getElementById('gcf-tournament');
+        var opt = document.createElement('option');
+        opt.value = name.trim();
+        opt.textContent = name.trim();
+        sel.appendChild(opt);
+        sel.value = name.trim();
+    }
+}
+
+function gameCfgSave() {
+    var seasonId = document.getElementById('gcf-season').value;
+    var visitorId = document.getElementById('gcf-visitor').value;
+    var homeId = document.getElementById('gcf-home').value;
+    var date = document.getElementById('gcf-date').value;
+
+    if (!visitorId || !homeId) { alert('Select both teams.'); return; }
+    if (visitorId === homeId) { alert('Visitor and Home teams must be different.'); return; }
+    if (!date) { alert('Select a date.'); return; }
+
+    var formData = new FormData();
+    formData.append('season_id', seasonId);
+    formData.append('visitor_team_id', visitorId);
+    formData.append('home_team_id', homeId);
+    formData.append('date', date);
+    formData.append('start_time', document.getElementById('gcf-start-time').value);
+    formData.append('duration', document.getElementById('gcf-duration').value);
+    formData.append('scheduled_innings', document.getElementById('gcf-innings').value);
+    formData.append('doubleheader', document.getElementById('gcf-doubleheader').value);
+    formData.append('entry_mode', document.getElementById('gcf-entry-mode').value);
+
+    var url = gameCfgEditId ? '/configure/game/' + gameCfgEditId + '/edit' : '/configure/game';
+
+    fetch(url, { method: 'POST', body: formData })
+        .then(function() {
+            // Reload game list in dropdown
+            onGameCfgSeasonChange(seasonId);
+            if (currentSeasonId) loadSchedule(currentSeasonId);
+            if (!gameCfgEditId) {
+                // Clear form for next new game
+                document.getElementById('gcf-game').value = '';
+                gameCfgEditId = null;
+            }
+        });
+}
+
+function hideGameModal() {
+    document.getElementById('game-configure-modal').style.display = 'none';
+}
 
 // ── Close modals on overlay click ────────────────────────────────────
 

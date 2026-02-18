@@ -26,7 +26,7 @@ make setup
 make dev
 ```
 
-Open http://localhost:5000 in your browser.
+Open http://localhost:5001 in your browser.
 
 ## Production Deployment (Home Server)
 
@@ -41,11 +41,11 @@ This starts the server on `0.0.0.0:5000`, accessible from your local network.
 
 Options (pick one):
 
-1. **Port forwarding** — Forward port 5000 on your router to your Mac's local IP
+1. **Port forwarding** — Forward port 5001 on your router to your Mac's local IP
 2. **Cloudflare Tunnel (recommended)** — Free, no port forwarding needed:
    ```bash
    brew install cloudflared
-   cloudflared tunnel --url http://localhost:5000
+   cloudflared tunnel --url http://localhost:5001
    ```
 3. **Tailscale** — VPN-based access from anywhere without exposing ports
 
