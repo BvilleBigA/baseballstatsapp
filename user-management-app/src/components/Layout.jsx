@@ -19,10 +19,10 @@ export default function Layout({ children, user, onLogout }) {
           <div className="MuiToolbar-root MuiToolbar-regular MuiToolbar-gutters">
             <a href="/admin/team/gameday3/" style={{ textDecoration: 'none' }}>
               <img
-                src="/static/images/gameday-stats-logo-white.png"
+                src="/static/favicon.png"
                 alt="Gameday Stats"
                 className="jss11"
-                style={{ height: 32, width: 'auto', display: 'block', objectFit: 'contain' }}
+                style={{ height: 36, width: 36, display: 'block', objectFit: 'contain' }}
               />
             </a>
             <p className="MuiTypography-root jss5 MuiTypography-body1">USER MANAGEMENT</p>
