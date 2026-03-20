@@ -1,0 +1,41 @@
+{% extends "team.html" %}
+
+{% block page_title %}My profile — Gameday Stats{% endblock %}
+
+{% block body_class %}gs-account-subpage{% endblock %}
+
+{% block head_extra %}{% endblock %}
+
+{% block top_level_name %}Account{% endblock %}
+
+{% block secondary_nav_links %}
+{% include "_account_secondary_nav.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="gs-back-link"><a href="{{ url_for('main.account') }}">&larr; Back to account</a></div>
+
+<h1>My profile</h1>
+
+<p class="text-muted" style="margin-bottom: 20px;">Edit your email address and phone.</p>
+
+{% if success %}<div class="alert-ok">{{ success }}</div>{% endif %}
+{% if error %}<div class="alert-err">{{ error }}</div>{% endif %}
+
+<div class="gs-card">
+    <h2>Profile</h2>
+    <form method="post" action="{{ url_for('main.account_profile') }}">
+        <div class="sd-fg" style="margin-bottom: 14px;">
+            <label for="email">Email</label>
+            <input type="email" class="form-control" id="email" name="email"
+                   value="{{ current_user.username or '' }}" autocomplete="email">
+        </div>
+        <div class="sd-fg" style="margin-bottom: 18px;">
+            <label for="phone">Phone</label>
+            <input type="tel" class="form-control" id="phone" name="phone"
+                   value="{{ current_user.phone or '' }}" autocomplete="tel">
+        </div>
+        <button type="submit" class="btn btn-gameday">Save profile</button>
+    </form>
+</div>
+{% endblock %}

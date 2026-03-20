@@ -1,4 +1,4 @@
-"""Entry point for the Baseball Stats app."""
+"""Entry point for Gameday Stats."""
 
 from app import create_app
 

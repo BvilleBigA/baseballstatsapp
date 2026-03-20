@@ -1,4 +1,4 @@
-"""Flask routes for the baseball stats app."""
+"""Flask routes for Gameday Stats."""
 
 import hashlib
 from types import SimpleNamespace
@@ -101,8 +101,18 @@ def _aggregate_pitching(stats_list):
     }
 
     er = totals["er"]
-    # ERA based on scheduled innings (7 for softball default)
-    totals["era"] = f"{(er * 7 * 3) / total_thirds:.2f}" if total_thirds > 0 else "0.00"
+    # Determine era_inn: default to 9, override based on sport/rules/scheduled
+    era_inn = 9
+    first_game = stats_list[0].game if stats_list and stats_list[0].game else None
+    if first_game:
+        era_inn = first_game.scheduled_innings or 9
+        if first_game.season:
+            sport_id = first_game.season.sport_id
+            rules = first_game.season.rules or ""
+            if (sport_id == 11 or rules == "rules_hs_ba") and not first_game.scheduled_innings:
+                era_inn = 7
+
+    totals["era"] = f"{(er * era_inn * 3) / total_thirds:.2f}" if total_thirds > 0 else "0.00"
     totals["whip"] = f"{(totals['bb'] + totals['h']) / (total_thirds / 3):.2f}" if total_thirds > 0 else "0.00"
     return totals
 
@@ -166,21 +176,35 @@ def admin():
     return redirect(url_for('main.gameday'))
 
 
-@main_bp.route('/admin/user', methods=['GET', 'POST'])
-def account():
+def _account_require_user():
+    """Return (user, None) or (None, redirect)."""
     user_id = session.get('user_id')
     if not user_id:
-        return redirect(url_for('main.login', next=request.url))
+        return None, redirect(url_for('main.login', next=request.url))
     current_user = User.query.get(user_id)
     if not current_user:
         session.pop('user_id', None)
-        return redirect(url_for('main.login'))
+        return None, redirect(url_for('main.login'))
+    return current_user, None
+
+
+@main_bp.route('/admin/user', methods=['GET'])
+def account():
+    current_user, redir = _account_require_user()
+    if redir:
+        return redir
+    return render_template('account.html', current_user=current_user)
+
+
+@main_bp.route('/admin/user/profile', methods=['GET', 'POST'])
+def account_profile():
+    current_user, redir = _account_require_user()
+    if redir:
+        return redir
 
     error = None
     success = None
-    action = request.form.get('action') if request.method == 'POST' else None
-
-    if action == 'update_profile':
+    if request.method == 'POST':
         new_email = request.form.get('email', '').strip()
         if new_email:
             existing = User.query.filter_by(username=new_email).first()
@@ -193,7 +217,20 @@ def account():
             db.session.commit()
             success = 'Profile updated.'
 
-    elif action == 'change_password':
+    return render_template('account_profile.html',
+                           current_user=current_user,
+                           error=error, success=success)
+
+
+@main_bp.route('/admin/user/password', methods=['GET', 'POST'])
+def account_password():
+    current_user, redir = _account_require_user()
+    if redir:
+        return redir
+
+    error = None
+    success = None
+    if request.method == 'POST':
         current_pw = request.form.get('current_password', '')
         new_pw = request.form.get('new_password', '')
         confirm_pw = request.form.get('confirm_password', '')
@@ -208,7 +245,7 @@ def account():
             db.session.commit()
             success = 'Password changed.'
 
-    return render_template('account.html',
+    return render_template('account_password.html',
                            current_user=current_user,
                            error=error, success=success)
 
@@ -297,7 +334,7 @@ def statgame():
 
 @main_bp.route('/action/stats/statsentry/<path:filename>')
 def statsentry_static(filename):
-    base = os.path.join(current_app.root_path, 'static', 'presto', 'statsentry')
+    base = os.path.join(current_app.root_path, 'static', 'gamedaystats', 'statsentry')
     filepath = os.path.join(base, filename)
     # Fallback: serve the WebKit cache file for any unknown .cache.js request
     if 'statentry/' in filename and filename.endswith('.cache.js') and not os.path.exists(filepath):
@@ -1305,13 +1342,11 @@ def season_detail():
 
     tasks_left = _season_tasks(season, teams, games)
 
-    # Determine which teams this user can see and whether to show the Teams tab
+    # Determine which teams this user can see (roster tab)
     if user.role == 'admin':
         visible_teams = teams
-        show_teams_tab = True
     else:
         visible_teams = [t for t in teams if _user_has_team_permission(user, season_id, t.id)]
-        show_teams_tab = len(visible_teams) > 1
 
     # If a non-admin has exactly one team and arrives without a tab param,
     # jump them straight to that team's roster.
@@ -1331,7 +1366,6 @@ def season_detail():
                            season=season,
                            teams=teams,
                            visible_teams=visible_teams,
-                           show_teams_tab=show_teams_tab,
                            games=games,
                            recent_games=recent_games,
                            sport_name=_sport_name(season.sport_code or ''),
@@ -1953,14 +1987,33 @@ def _boxscore_data(game):
     max_inn = max(inn_map.keys()) if inn_map else 0
     num_inn = max(max_inn, sched)
 
+    # "X" or "99" = team did not bat in that inning; display as X
+    def _inn_display(score):
+        if score in ('X', '99', 99):
+            return 'X'
+        return str(score or 0)
+    def _inn_for_sum(score):
+        if score in ('X', '99', 99):
+            return 0
+        try:
+            return int(score or 0)
+        except (TypeError, ValueError):
+            return 0
     innings_data = []
     for n in range(1, num_inn + 1):
         row = inn_map.get(n)
         innings_data.append({
             'num': n,
-            'v': str(row.visitor_score or 0) if row else '0',
-            'h': str(row.home_score  or 0) if row else '0',
+            'v': _inn_display(row.visitor_score) if row else '0',
+            'h': _inn_display(row.home_score) if row else '0',
         })
+    # Recompute runs from innings so total matches linescore (X/99 excluded)
+    if inn_map:
+        visitor_runs = sum(_inn_for_sum(inn_map[n].visitor_score) for n in inn_map)
+        home_runs = sum(_inn_for_sum(inn_map[n].home_score) for n in inn_map)
+    else:
+        visitor_runs = game.visitor_runs or 0
+        home_runs = game.home_runs or 0
 
     def _bat_rows(team_id):
         rows = []
@@ -2133,11 +2186,11 @@ def _boxscore_data(game):
         'visitor_code':  vis.code  if vis  else '',
         'home_name':     home.name if home else '',
         'home_code':     home.code if home else '',
-        'visitor_runs':  game.visitor_runs  or 0,
+        'visitor_runs':  visitor_runs,
         'visitor_hits':  game.visitor_hits  or 0,
         'visitor_errors':game.visitor_errors or 0,
         'visitor_lob':   game.visitor_lob   or 0,
-        'home_runs':     game.home_runs     or 0,
+        'home_runs':     home_runs,
         'home_hits':     game.home_hits     or 0,
         'home_errors':   game.home_errors   or 0,
         'home_lob':      game.home_lob      or 0,
@@ -2224,6 +2277,21 @@ def game_detail(game_id):
     vis_defense = _defense_from_stats(v_batting) if game.visitor_team_id else {}
     is_new_game = not (game.batting_stats or game.plays)
 
+    # Recompute runs from innings so X/99 never inflate the total
+    def _inn_for_sum(s):
+        if s in ('X', '99', 99):
+            return 0
+        try:
+            return int(s or 0)
+        except (TypeError, ValueError):
+            return 0
+    if innings:
+        visitor_runs = sum(_inn_for_sum(i.visitor_score) for i in innings)
+        home_runs = sum(_inn_for_sum(i.home_score) for i in innings)
+    else:
+        visitor_runs = game.visitor_runs or 0
+        home_runs = game.home_runs or 0
+
     return render_template('game_detail.html',
                            current_user=user,
                            game=game,
@@ -2236,7 +2304,9 @@ def game_detail(game_id):
                            h_batting=h_batting,
                            v_pitching=v_pitching,
                            h_pitching=h_pitching,
-                           is_new_game=is_new_game)
+                           is_new_game=is_new_game,
+                           visitor_runs=visitor_runs,
+                           home_runs=home_runs)
 
 
 @main_bp.route('/api/games/<int:game_id>/action', methods=['POST'])
@@ -2273,6 +2343,8 @@ def api_games_action(game_id):
     outs_on_play = int(data.get('outs_on_play', 0))
     rbi = int(data.get('rbi', 0))
     runs_scored = int(data.get('runs_scored', 0))
+    earned_runs = data.get('earned_runs')
+    earned_runs = int(earned_runs) if earned_runs is not None and str(earned_runs).strip() != '' else None
     narrative = (data.get('narrative') or '').strip()
     batter_name = (data.get('batter_name') or '').strip()
     pitcher_name = (data.get('pitcher_name') or '').strip()
@@ -2288,7 +2360,7 @@ def api_games_action(game_id):
         outs_before=outs_before, outs_on_play=outs_on_play,
         batter_name=batter_name or None, pitcher_name=pitcher_name or None,
         narrative=narrative or None, action_type=action_type or None,
-        rbi=rbi, runs_scored=runs_scored, runners_after=runners_after,
+        rbi=rbi, runs_scored=runs_scored, earned_runs=earned_runs, runners_after=runners_after,
         runner_first=runner_first, runner_second=runner_second, runner_third=runner_third,
     )
     db.session.add(play)
@@ -2300,12 +2372,16 @@ def api_games_action(game_id):
             inn = InningScore(game_id=game.id, inning=inning, visitor_score='0', home_score='0')
             db.session.add(inn)
         try:
+            def _score_val(s):
+                if s in ('X', '99'):
+                    return 0
+                return int(s or 0)
             if half == 'top':
-                v = int(inn.visitor_score or 0) + runs_scored
+                v = _score_val(inn.visitor_score) + runs_scored
                 inn.visitor_score = str(v)
                 game.visitor_runs = (game.visitor_runs or 0) + runs_scored
             else:
-                h = int(inn.home_score or 0) + runs_scored
+                h = _score_val(inn.home_score) + runs_scored
                 inn.home_score = str(h)
                 game.home_runs = (game.home_runs or 0) + runs_scored
         except (TypeError, ValueError):
@@ -2352,7 +2428,40 @@ def api_games_action(game_id):
     for seq, p in enumerate(plays_sorted, start=1):
         p.sequence = seq
     db.session.commit()
+    try:
+        from app.xmlapi import write_livestats_xml
+        write_livestats_xml(game)
+    except Exception:
+        pass
     return jsonify({'ok': True, 'saved': True})
+
+
+@main_bp.route('/api/games/<int:game_id>/plays/<int:play_id>', methods=['PATCH'])
+def api_games_play_edit(game_id, play_id):
+    """Edit an existing play's fields. Only updates fields that are present in the request body."""
+    user_id = session.get('user_id')
+    if not user_id or not User.query.get(user_id):
+        return jsonify({'ok': False, 'error': 'Login required'}), 401
+    play = Play.query.filter_by(id=play_id, game_id=game_id).first_or_404()
+    data = request.get_json() or {}
+    editable = [
+        'action_type', 'narrative', 'batter_name', 'pitcher_name',
+        'runner_first', 'runner_second', 'runner_third',
+        'outs_on_play', 'runners_after', 'runs_scored', 'rbi',
+        'outs_before', 'inning', 'half',
+    ]
+    for field in editable:
+        if field in data:
+            setattr(play, field, data[field] if data[field] != '' else None
+                    if field in ('action_type', 'narrative', 'batter_name', 'pitcher_name',
+                                 'runner_first', 'runner_second', 'runner_third') else data[field])
+    db.session.commit()
+    try:
+        from app.xmlapi import write_livestats_xml
+        write_livestats_xml(play.game)
+    except Exception:
+        pass
+    return jsonify({'ok': True, 'play_id': play.id})
 
 
 @main_bp.route('/api/games/<int:game_id>/lineups', methods=['POST'])
@@ -2398,6 +2507,11 @@ def api_games_lineups(game_id):
 
     game.has_lineup = True
     db.session.commit()
+    try:
+        from app.xmlapi import write_livestats_xml
+        write_livestats_xml(game)
+    except Exception:
+        pass
     return jsonify({'ok': True})
 
 
@@ -2415,7 +2529,7 @@ def stat_boxscore_pdf(event_id):
     return render_template('boxscore_print.html', game=game, season=season, data=data)
 
 
-# ── Stat History (PrestoSports viewStatHistory.jsp) ──────────────────────────
+# ── Stat History (Gameday Stats viewStatHistory.jsp) ──────────────────────────
 
 @main_bp.route('/admin/team/event/viewStatHistory.jsp')
 def view_stat_history():
@@ -2541,7 +2655,7 @@ def download_version():
                         headers={'Content-Disposition': f'attachment; filename="{fname}.json"'})
 
 
-# ── Configure season API (used by system_preferences.html) ───────────────────
+# ── Configure season API ─────────────────────────────────────────────────────
 
 @main_bp.route('/configure/season', methods=['POST'])
 def configure_season_add():

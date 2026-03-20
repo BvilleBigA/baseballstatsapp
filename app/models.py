@@ -355,7 +355,18 @@ class PitchingStats(db.Model):
         total_thirds = ip_full * 3 + ip_frac
         if total_thirds == 0:
             return float("inf") if self.er > 0 else 0.0
-        return (self.er * 7 * 3) / total_thirds  # 7-inning game default for softball
+        
+        # Determine era_inn: primary source is scheduled_innings, then rules/sport
+        era_inn = (self.game.scheduled_innings if self.game else None) or 9
+        if self.game and self.game.season:
+            rules = self.game.season.rules or ""
+            sport_id = self.game.season.sport_id
+            if sport_id == 11 or rules == "rules_hs_ba":
+                # Default to 7 for all Softball and High School Baseball
+                if not self.game.scheduled_innings:
+                    era_inn = 7
+            
+        return (self.er * era_inn * 3) / total_thirds
 
     def whip(self):
         ip_full = int(self.ip)
@@ -436,6 +447,7 @@ class Play(db.Model):
     rbi = db.Column(db.Integer, default=0)
     outs_on_play = db.Column(db.Integer, default=0)
     runs_scored = db.Column(db.Integer, default=0)
+    earned_runs = db.Column(db.Integer)  # earned portion of runs_scored; unearned when runs_scored > earned_runs
     runners_after = db.Column(db.String(3), default='000')  # bitmask: '111' = bases loaded
     # Substitution-specific fields (only populated when action_type == 'SUB')
     sub_who = db.Column(db.String(200), default='')  # player coming in

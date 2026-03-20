@@ -50,7 +50,7 @@ def _stub(endpoint):
 
 
 def _rand_key(n=16):
-    """Generate a random alphanumeric version key like PrestoSports uses."""
+    """Generate a random alphanumeric version key like Gameday Stats uses."""
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=n))
 
 
@@ -83,6 +83,58 @@ def _version_label(game, data):
     status = data.get('status_label') or '1st inning'
     now_str = datetime.utcnow().strftime('%-m/%-d/%Y %-I:%M %p UTC')
     return f"{vis} {vr}, {home} {hr}, {status} (Uploaded on {now_str}) by {data.get('created_by', 'system')}"
+
+
+def _sanitize_boxscore_names(boxscore):
+    """Normalize all player names in the GWT blob to First Last format."""
+    if not boxscore:
+        return
+
+    def _fix_name(n):
+        if not n: return n
+        n = str(n).strip()
+        if ', ' in n:
+            parts = n.split(', ', 1)
+            return f"{parts[1].strip()} {parts[0].strip()}" if len(parts) == 2 else n
+        return n
+
+    # 1. Teams/Players
+    for team in boxscore.get('teams', []):
+        for p in team.get('players', []):
+            if 'completeName' in p:
+                p['completeName'] = _fix_name(p['completeName'])
+            if 'lastName' in p and ', ' in str(p['lastName']):
+                # If lastName contains a comma, it's actually Last, First
+                p['completeName'] = _fix_name(p['lastName'])
+                # Try to split it properly
+                parts = str(p['lastName']).split(', ', 1)
+                p['lastName'] = parts[0].strip()
+                p['firstName'] = parts[1].strip()
+
+    # 2. Plays
+    raw_plays = boxscore.get('plays') or boxscore.get('rawPlays') or {}
+    for inn in raw_plays.values():
+        if not isinstance(inn, list): continue
+        for play in inn:
+            if 'batter' in play:
+                play['batter'] = _fix_name(play['batter'])
+            if 'pitcher' in play:
+                play['pitcher'] = _fix_name(play['pitcher'])
+            # Narrative inside props
+            props = play.get('props', {})
+            for i in range(5):
+                nk = f'NARRATIVE{i}'
+                if nk in props:
+                    # This is tricky as it's text, but we can try to replace known patterns
+                    # if the user specifically complained about play-by-play.
+                    # However, GWT usually rebuilds narrative from batter/pitcher fields.
+                    pass
+
+    # 3. eventInfo (batter/pitcher/runners)
+    ei = boxscore.get('eventInfo', {})
+    for k in ['batter', 'pitcher', 'first', 'second', 'third']:
+        if k in ei:
+            ei[k] = _fix_name(ei[k])
 
 
 def _sanitize_boxscore_batting_order(boxscore):
@@ -339,6 +391,17 @@ def _parse_and_persist_plays(game, bs, _int):
     vis_roster = {str(p.uniform_number): p for p in (game.visitor_team.players if game.visitor_team else [])}
     home_roster = {str(p.uniform_number): p for p in (game.home_team.players if game.home_team else [])}
 
+    def _short(player):
+        first = (player.first_name or '').strip()
+        last = (player.last_name or '').strip()
+        if first and last:
+            return f"{first} {last}"
+        n = (player.name or '').strip()
+        if ', ' in n:
+            parts = n.split(', ', 1)
+            return f"{parts[1].strip()} {parts[0].strip()}" if len(parts) == 2 else n
+        return n
+
     def _resolve_narrative(text):
         import re as _re
         def _repl(m):
@@ -346,26 +409,9 @@ def _parse_and_persist_plays(game, bs, _int):
             rstr = vis_roster if vh == 'V' else home_roster
             player = rstr.get(uni)
             if player:
-                last = (player.last_name or '').strip()
-                first = (player.first_name or '').strip()
-                if last and first:
-                    return f"{last}, {first[0]}."
-                parts = (player.name or '').strip().split()
-                if len(parts) >= 2:
-                    return f"{parts[-1]}, {parts[0][0]}."
-                return player.name or uni
+                return _short(player)
             return uni
         return _re.sub(r'%p([VH]):(\w+)', _repl, text or '')
-
-    def _short(player):
-        last = (player.last_name or '').strip()
-        first = (player.first_name or '').strip()
-        if last and first:
-            return f"{last}, {first[0]}."
-        parts = (player.name or '').strip().split()
-        if len(parts) >= 2:
-            return f"{parts[-1]}, {parts[0][0]}."
-        return player.name or ''
 
     Play.query.filter_by(game_id=game.id).delete()
 
@@ -618,11 +664,21 @@ def _build_player_obj(player, batting, pitching, fielding, participated, is_init
     When is_initial_roster=True (app first starting, no saved state), only Name, number, b/t, class are sent."""
     uni = player.uniform_number or ""
 
-    # "Last, First" format — fall back to full name if no last/first split
-    if player.last_name:
-        complete = f"{player.last_name}, {player.first_name or ''}".strip(', ')
+    # "First Last" format — fall back to full name if no last/first split
+    # If name contains a comma, try to reverse it to "First Last"
+    first = (player.first_name or '').strip()
+    last = (player.last_name or '').strip()
+    if first and last:
+        complete = f"{first} {last}"
     else:
-        complete = player.name or ""
+        n = (player.name or '').strip()
+        if ', ' in n:
+            parts = n.split(', ', 1)
+            last = parts[0].strip()
+            first = parts[1].strip()
+            complete = f"{first} {last}"
+        else:
+            complete = n
 
     if is_initial_roster:
         return {
@@ -669,8 +725,8 @@ def _build_player_obj(player, batting, pitching, fielding, participated, is_init
     return {
         "uniform":              uni,
         "completeName":         complete,
-        "lastName":             player.last_name or player.name or "",
-        "firstName":            player.first_name or "",
+        "lastName":             last or player.name or "",
+        "firstName":            first or "",
         "pos":                  pos,
         "position":             "",
         "offPosition":          "",
@@ -827,6 +883,11 @@ def _build_event_payload(game, sport_code="1"):
             pitching    = pitching_map.get(pid)
             fielding    = fielding_map.get(pid)
             participated = bool(batting or pitching or fielding)
+            
+            # Pregame report: only show the starting lineups (skip bench)
+            if is_initial and not participated:
+                continue
+
             result.append(_build_player_obj(
                 player, batting, pitching, fielding, participated,
                 is_initial_roster=is_initial
@@ -910,6 +971,7 @@ def _build_event_payload(game, sport_code="1"):
     #
     if boxscore:
         _sanitize_boxscore_batting_order(boxscore)
+        _sanitize_boxscore_names(boxscore)
         # Merge game metadata into blob's eventInfo so persisted values show on reload
         ei = boxscore.setdefault("eventInfo", {})
         def _fill(key, val, fmt=str):
@@ -1252,6 +1314,7 @@ def save_game():
     ei = boxscore.get('eventInfo') or {}
     win_uni = _int(ei.get('pitcherRecordWinUni', -1))
     loss_uni = _int(ei.get('pitcherRecordLossUni', -1))
+    save_uni = _int(ei.get('pitcherSaveUni', -1))
     duration = (ei.get('duration') or '').strip()
     if win_uni != -1 and loss_uni != -1 and duration:
         game.is_complete = True
@@ -1260,22 +1323,31 @@ def save_game():
     _persist_setup_to_game(game, ei, bs_teams, _int)
 
     # Inning scores: trim trailing 0-0 innings so unstarted games don't create
-    # phantom innings that push GWT to the last inning on reload
+    # phantom innings that push GWT to the last inning on reload.
+    # GWT/Presto use 99 as sentinel for "did not bat"; store as "X" and use 0 for runs sum.
     innings_to_save = []
     for i in range(max_periods):
         vs = _int(vis_periods[i].get('score'))  if i < len(vis_periods)  else 0
         hs = _int(home_periods[i].get('score')) if i < len(home_periods) else 0
-        innings_to_save.append((i + 1, vs, hs))
-    while innings_to_save and innings_to_save[-1][1] == 0 and innings_to_save[-1][2] == 0:
+        v_stored = 'X' if vs == 99 else str(vs)
+        h_stored = 'X' if hs == 99 else str(hs)
+        v_for_sum = 0 if vs == 99 else vs
+        h_for_sum = 0 if hs == 99 else hs
+        innings_to_save.append((i + 1, v_stored, h_stored, v_for_sum, h_for_sum))
+    # Don't trim when last inning has X (didn't bat) — that's a real inning
+    while innings_to_save and innings_to_save[-1][3] == 0 and innings_to_save[-1][4] == 0:
+        last = innings_to_save[-1]
+        if last[1] == 'X' or last[2] == 'X':
+            break
         innings_to_save.pop()
     if innings_to_save:
         InningScore.query.filter_by(game_id=game.id).delete()
-        for inning_num, v_score, h_score in innings_to_save:
+        for inning_num, v_stored, h_stored, v_for_sum, h_for_sum in innings_to_save:
             db.session.add(InningScore(game_id=game.id, inning=inning_num,
-                                       visitor_score=str(v_score),
-                                       home_score=str(h_score)))
-        game.visitor_runs = sum(v for _, v, _ in innings_to_save)
-        game.home_runs    = sum(h for _, _, h in innings_to_save)
+                                       visitor_score=v_stored,
+                                       home_score=h_stored))
+        game.visitor_runs = sum(x[3] for x in innings_to_save)
+        game.home_runs    = sum(x[4] for x in innings_to_save)
 
     # --- Player stats ---
     for idx, bs_team in enumerate(bs_teams[:2]):
@@ -1420,13 +1492,18 @@ def save_game():
                 cur['pos'] = pos or cur['pos']
                 fld_accum[player.id] = cur
 
+        pid_to_uni = {p.id: _int(p.uniform_number) for p in team_obj.players if p.uniform_number}
         for pid, acc in pit_accum.items():
             thirds = acc['thirds']
             ip_val = (thirds // 3) + (thirds % 3) / 10.0 if thirds % 3 else thirds // 3
+            p_uni = pid_to_uni.get(pid, -1)
             db.session.add(PitchingStats(
                 game_id=game.id, player_id=pid, team_id=team_obj.id,
                 ip=ip_val, h=acc['h'], r=acc['r'], er=acc['er'],
                 bb=acc['bb'], so=acc['so'], bf=acc['bf'],
+                win=(p_uni != -1 and p_uni == win_uni),
+                loss=(p_uni != -1 and p_uni == loss_uni),
+                save=(p_uni != -1 and p_uni == save_uni),
             ))
         for pid, acc in fld_accum.items():
             db.session.add(FieldingStats(
@@ -1455,6 +1532,11 @@ def save_game():
 
     _save_version(game)
     db.session.commit()
+    try:
+        from app.xmlapi import write_livestats_xml
+        write_livestats_xml(game)
+    except Exception:
+        pass
     return jsonify({"ok": True, "saved": True})
 
 
@@ -1505,6 +1587,7 @@ def _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw=''):
             return 0.0
 
     _sanitize_boxscore_batting_order(bs)
+    _sanitize_boxscore_names(bs)
     _sync_live_count_in_boxscore(bs)
 
     bs_teams = bs.get('teams', [])
@@ -1559,6 +1642,7 @@ def _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw=''):
     ei = bs.get('eventInfo') or {}
     win_uni = _int(ei.get('pitcherRecordWinUni', -1))
     loss_uni = _int(ei.get('pitcherRecordLossUni', -1))
+    save_uni = _int(ei.get('pitcherSaveUni', -1))
     duration = (ei.get('duration') or '').strip()
     if win_uni != -1 and loss_uni != -1 and duration:
         game.is_complete = True
@@ -1572,24 +1656,34 @@ def _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw=''):
     # that haven't started yet, so using statsPerPeriod keys or raw array length
     # to determine "innings played" creates phantom innings and pushes GWT to
     # the last inning / marks the game Final on every reload.
+    # GWT/Presto use 99 as sentinel for "did not bat"; store as "X" and use 0 for runs sum.
     innings_to_save = []
     for i in range(max_periods):
         vs = _int(vis_periods[i].get('score'))  if i < len(vis_periods)  else 0
         hs = _int(home_periods[i].get('score')) if i < len(home_periods) else 0
-        innings_to_save.append((i + 1, vs, hs))
+        v_stored = 'X' if vs == 99 else str(vs)
+        h_stored = 'X' if hs == 99 else str(hs)
+        v_for_sum = 0 if vs == 99 else vs
+        h_for_sum = 0 if hs == 99 else hs
+        innings_to_save.append((i + 1, v_stored, h_stored, v_for_sum, h_for_sum))
 
-    # Remove trailing scoreless innings (those haven't actually been played yet)
-    while innings_to_save and innings_to_save[-1][1] == 0 and innings_to_save[-1][2] == 0:
-        innings_to_save.pop()
+    # Remove trailing scoreless innings (those haven't actually been played yet).
+    # Do not trim when last inning has "X" (didn't bat) — that's a real played inning.
+    while innings_to_save:
+        last = innings_to_save[-1]
+        if last[3] == 0 and last[4] == 0 and last[1] != 'X' and last[2] != 'X':
+            innings_to_save.pop()
+        else:
+            break
 
     if innings_to_save:
         InningScore.query.filter_by(game_id=game.id).delete()
-        for inning_num, v_score, h_score in innings_to_save:
+        for inning_num, v_stored, h_stored, v_for_sum, h_for_sum in innings_to_save:
             db.session.add(InningScore(game_id=game.id, inning=inning_num,
-                                       visitor_score=str(v_score),
-                                       home_score=str(h_score)))
-        game.visitor_runs = sum(v for _, v, _ in innings_to_save)
-        game.home_runs    = sum(h for _, _, h in innings_to_save)
+                                       visitor_score=v_stored,
+                                       home_score=h_stored))
+        game.visitor_runs = sum(x[3] for x in innings_to_save)
+        game.home_runs    = sum(x[4] for x in innings_to_save)
     # If innings_to_save is empty (game not started / no runs yet) leave the
     # existing DB innings untouched — a reload must never wipe real inning data.
 
@@ -1767,9 +1861,11 @@ def _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw=''):
                 cur['pos'] = pos or cur['pos']
                 fld_accum[player.id] = cur
 
+        pid_to_uni = {p.id: _int(p.uniform_number) for p in team_obj.players if p.uniform_number}
         for pid, acc in pit_accum.items():
             thirds = acc['thirds']
             ip_val = (thirds // 3) + (thirds % 3) / 10.0 if thirds % 3 else thirds // 3
+            p_uni = pid_to_uni.get(pid, -1)
             db.session.add(PitchingStats(
                 game_id=game.id, player_id=pid, team_id=team_obj.id,
                 ip=ip_val, h=acc['h'], r=acc['r'], er=acc['er'],
@@ -1779,6 +1875,9 @@ def _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw=''):
                 ground=acc['ground'], ibb=acc['ibb'],
                 doubles=acc['doubles'], triples=acc['triples'],
                 pitches=acc['pitches'],
+                win=(p_uni != -1 and p_uni == win_uni),
+                loss=(p_uni != -1 and p_uni == loss_uni),
+                save=(p_uni != -1 and p_uni == save_uni),
             ))
         for pid, acc in fld_accum.items():
             db.session.add(FieldingStats(
@@ -1853,6 +1952,11 @@ def save_boxscore():
 
     _persist_boxscore_full(game, bs, statuscode=statuscode, live_stats_raw=live_stats_raw)
     db.session.commit()
+    try:
+        from app.xmlapi import write_livestats_xml
+        write_livestats_xml(game)
+    except Exception:
+        pass
     return jsonify({"ok": True, "saved": True})
 
 
@@ -1883,6 +1987,7 @@ def process_raw_play():
 
     # Store blob and run full saveboxscore persist (inning scores, stats, plays)
     _sanitize_boxscore_batting_order(bs)
+    _sanitize_boxscore_names(bs)
     _sync_live_count_in_boxscore(bs)
     game.gwt_bs_blob = _json.dumps(bs)
 
@@ -1890,6 +1995,11 @@ def process_raw_play():
     _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw='')
 
     db.session.commit()
+    try:
+        from app.xmlapi import write_livestats_xml
+        write_livestats_xml(game)
+    except Exception:
+        pass
     return jsonify({"ok": True})
 
 

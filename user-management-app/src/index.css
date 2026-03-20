@@ -1,4 +1,4 @@
-/* Presto styles come from parent manage_users_spa.html */
+/* Theme styles (AppBar, table, etc.) load from manage_users_spa.html */
 body {
   margin: 0;
   overflow-x: hidden;

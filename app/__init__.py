@@ -147,6 +147,7 @@ def _migrate_db():
         ("play", "rbi", "INTEGER DEFAULT 0"),
         ("play", "outs_on_play", "INTEGER DEFAULT 0"),
         ("play", "runs_scored", "INTEGER DEFAULT 0"),
+        ("play", "earned_runs", "INTEGER"),
         ("play", "runners_after", "VARCHAR(3) DEFAULT '000'"),
         ("play", "sub_who",  "VARCHAR(200) DEFAULT ''"),
         ("play", "sub_for",  "VARCHAR(200) DEFAULT ''"),
@@ -240,6 +241,9 @@ def _seed_demo_data():
             db.session.commit()
 
     if Season.query.filter_by(name="Demo Season").first():
+        return
+    # Do not seed demo data once real seasons exist (e.g. after user removed Demo Season).
+    if Season.query.count() > 0:
         return
 
     season = Season(name="Demo Season", play_entry_mode="box_game_totals", rules="rules_hs_sb", gender="female")

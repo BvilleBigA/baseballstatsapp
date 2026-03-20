@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Baseball Stats{% endblock %}</title>
+    <title>{% block title %}Gameday Stats{% endblock %}</title>
     <style>
         :root {
             --primary: #1a3a5c;
@@ -440,7 +440,7 @@
                 <a href="#" onclick="event.preventDefault(); toggleDropdown('help-dropdown');">Help</a>
                 <div id="help-dropdown" class="dropdown-menu">
                     <button onclick="closeAllDropdowns(); alert('Users Manual - Coming soon.');"><span class="checkmark-space"></span>View Users Manual</button>
-                    <button onclick="closeAllDropdowns(); alert('Gameday Stats Baseball\nVersion 1.0');"><span class="checkmark-space"></span>About Gameday Stats Baseball</button>
+                    <button onclick="closeAllDropdowns(); alert('Gameday Stats\nVersion 1.0');"><span class="checkmark-space"></span>About Gameday Stats</button>
                 </div>
             </div>
         </div>
@@ -456,7 +456,7 @@
         {% block content %}{% endblock %}
     </div>
 
-    <footer>Gameday Stats Baseball</footer>
+    <footer>Gameday Stats</footer>
 
     <script>
         // ── Dropdown menu ────────────────────────────────────────────────

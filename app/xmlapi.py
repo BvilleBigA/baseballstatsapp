@@ -1,20 +1,28 @@
 """
-XML export blueprint — generates PrestoSports bsgame XML for completed/in-progress games.
+XML export blueprint — generates Gameday Stats bsgame XML for completed/in-progress games.
 
 Route:  GET /game/<event_id>/boxscore.xml
         GET /game/<event_id>/boxscore.xml?download=1   (force file download)
+
+Livestats testing (temporary):
+        GET /livestats/export          — writes XML for all games to livestats_xml/
+        GET /livestats/game/<id>.xml   — serves XML from folder (for team website testing)
 """
 
 import json as json_mod
 import hashlib
+import os
 import re
 from datetime import date as date_cls
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, request, current_app, session, send_from_directory
 import xml.etree.ElementTree as ET
 
 from app.models import Game, Play, InningScore, BattingStats, PitchingStats
 
 xml_bp = Blueprint('xml', __name__)
+
+# Folder for livestats XML export (temporary testing) — local folder in project root
+LIVESTATS_XML_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'livestats_xml')
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,7 +54,7 @@ def _short_name(player):
 
 
 def _player_id(player):
-    """Return stable unique playerId for PrestoSports XML. Uses external_id when set, else derives from player.id."""
+    """Return stable unique playerId for Gameday Stats XML. Uses external_id when set, else derives from player.id."""
     if player.external_id and str(player.external_id).strip():
         return str(player.external_id).strip()
     h = hashlib.sha256(f"player_{player.id}".encode()).hexdigest()
@@ -83,24 +91,50 @@ def _presto_name(player):
 
 
 def _fmt_ip(ip_val):
-    """Format innings-pitched float: 7.0 stays '7.0', 4.1 stays '4.1'."""
+    """Format innings-pitched: 1 out = .1, 2 outs = .2, 3 outs = 1.0."""
     if ip_val is None:
         return '0.0'
-    return f"{float(ip_val):.1f}"
+    val = float(ip_val)
+    full = int(val)
+    # Handle X.1, X.2 as notation already (e.g. 7.1 = 7 innings 1 out)
+    frac_part = round((val - full) * 10)
+    if frac_part > 0 and frac_part < 3:
+        return f"{full}.{frac_part}"
+    # Handle X.333, X.666 as decimal thirds
+    remainder = round((val - full) * 3)
+    if remainder == 3:
+        full += 1
+        remainder = 0
+    return f"{full}.{remainder}"
 
 
 def _fmt_pct3(x):
-    """Format 3-decimal percentage: Presto uses .000 not 0.000 for zero."""
+    """Format 3-decimal percentage: Presto uses .500 not 0.500 (no leading zero)."""
     if x is None or (isinstance(x, (int, float)) and x == 0):
         return '.000'
-    return f"{float(x):.3f}"
+    s = f"{float(x):.3f}"
+    # Remove leading zero for values less than 1 (e.g. 0.500 -> .500)
+    if s.startswith('0.'):
+        s = s[1:]
+    return s
 
 
 # Presto blob numeric position -> XML pos string (1-9 standard, 10/11 DH/FLEX)
-_BLOB_POS_MAP = {
-    1: 'p', 2: 'c', 3: '1b', 4: '2b', 5: '3b', 6: 'ss',
-    7: 'lf', 8: 'cf', 9: 'rf', 10: 'dh', 11: 'dh', 0: 'dh',
-}
+def _get_pos_string(pos_num, sport_id=1):
+    """Return XML position string for the given numeric position and sport."""
+    if pos_num is None:
+        return ''
+    mapping = {
+        1: 'p', 2: 'c', 3: '1b', 4: '2b', 5: '3b', 6: 'ss',
+        7: 'lf', 8: 'cf', 9: 'rf', 10: 'dh', 11: 'dh', 0: 'dh',
+    }
+    # Softball overrides: 10=dp, 11=flex
+    if sport_id == 11:
+        mapping[10] = 'dp'
+        mapping[11] = 'flex'
+        mapping[0]  = 'dp'
+    return mapping.get(pos_num, '')
+
 
 def _presto_action(play):
     """
@@ -204,7 +238,7 @@ def _indent(elem, level=0):
         elem.tail = '\n'
 
 
-# PrestoSports GWT pitch codes (first 2 digits of 4-digit codes like 0422/0222/0122)
+# Gameday Stats GWT pitch codes (first 2 digits of 4-digit codes like 0422/0222/0122)
 # → letter codes: B=ball, F=foul, K=called/looking strike, S=swinging strike,
 #   P=in play, I=intentional ball, H=hit by pitch
 _GWT_PITCH_CODE = {
@@ -229,6 +263,118 @@ def _pitch_count_from_sequence(raw):
     return len([p for p in raw.split('/') if p.strip() and len(p.strip()) >= 2])
 
 
+def _gwt_blob_latest_play(bs):
+    """
+    Latest raw/GWT play in the boxscore JSON. last_key is (inning, half_ord, seq)
+    with half_ord 0=visitor/top, 1=home/bottom. Returns ((-1,-1,-1), None) if none.
+    """
+    raw_plays = bs.get('plays') or bs.get('rawPlays') or {}
+    last_play = None
+    last_key = (-1, -1, -1)
+    if not raw_plays:
+        return last_key, last_play
+    for inn_k, play_list in raw_plays.items():
+        try:
+            inn_num = int(inn_k)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(play_list, list):
+            continue
+        for p in play_list:
+            if p.get('playtype') in ('TURNOVR', 'SCOREADJ', 'INNINGS_ADVANCE'):
+                continue
+            half_ord = 1 if p.get('homeTeam') else 0
+            seq = int(p.get('sequence') or 0)
+            key = (inn_num, half_ord, seq)
+            if key > last_key:
+                last_key = key
+                last_play = p
+    return last_key, last_play
+
+
+def _gwt_status_line_dict(game):
+    """
+    Status-line fields from the persisted GWT blob (eventInfo + raw plays).
+    When gwt_bs_blob exists, XML export should prefer this over inferring from Play rows.
+    """
+    if not getattr(game, 'gwt_bs_blob', None) or not str(game.gwt_bs_blob).strip():
+        return None
+    try:
+        bs = json_mod.loads(game.gwt_bs_blob)
+    except (json_mod.JSONDecodeError, TypeError):
+        return None
+    ei = bs.get('eventInfo')
+    raw_block = bs.get('plays') or bs.get('rawPlays')
+    if not ei and not raw_block:
+        return None
+    ei = ei or {}
+    last_key, last_play = _gwt_blob_latest_play(bs)
+
+    def _to_int(v, default=None):
+        try:
+            if v is None or (isinstance(v, str) and not str(v).strip()):
+                return default
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    inning = _to_int(ei.get('statusPeriod'), None)
+    if inning is None or inning < 1:
+        inning = last_key[0] if last_key[0] >= 1 else 1
+
+    ho = ei.get('isHomeOffensive')
+    if isinstance(ho, str):
+        is_home_off = ho.strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+    elif ho is None:
+        is_home_off = bool(last_play.get('homeTeam')) if last_play else False
+    else:
+        is_home_off = bool(ho)
+
+    vh = 'H' if is_home_off else 'V'
+    outs = _to_int(ei.get('currentCountOuts'), 0)
+    if outs is None:
+        outs = 0
+
+    b_e, s_e, np_e = ei.get('ballOnCurrentPlay'), ei.get('strikesOnCurrentPlay'), ei.get('pitchesNumberOnCurrentPlay')
+    b_int, s_int, np_int = None, None, None
+    if b_e is not None and str(b_e).strip() != '' and s_e is not None and str(s_e).strip() != '':
+        try:
+            b_int = int(b_e)
+            s_int = int(s_e)
+            np_int = int(np_e) if np_e is not None and str(np_e).strip() != '' else (b_int + s_int)
+        except (TypeError, ValueError):
+            b_int = s_int = np_int = None
+    if b_int is None:
+        exp_half = 1 if is_home_off else 0
+        live = _live_count_from_blob(game, expected_inn=inning, expected_half_ord=exp_half)
+        if not live:
+            live = _live_count_from_blob(game)
+        if live:
+            b_int, s_int, np_int = live
+        else:
+            b_int, s_int, np_int = 0, 0, 0
+
+    def _s(v):
+        if v is None:
+            return None
+        t = str(v).strip()
+        return t or None
+
+    return {
+        'inning': inning,
+        'vh': vh,
+        'outs': outs,
+        'b': b_int,
+        's': s_int,
+        'np': np_int,
+        'batter': _s(ei.get('batter')),
+        'pitcher': _s(ei.get('pitcher')),
+        'first': _s(ei.get('first')),
+        'second': _s(ei.get('second')),
+        'third': _s(ei.get('third')),
+    }
+
+
 def _live_count_from_blob(game, expected_inn=None, expected_half_ord=None):
     """
     Extract live pitch count (balls, strikes, np) from gwt_bs_blob when the in-progress
@@ -248,27 +394,7 @@ def _live_count_from_blob(game, expected_inn=None, expected_half_ord=None):
     except (json_mod.JSONDecodeError, TypeError):
         return None
 
-    raw_plays = bs.get('plays') or bs.get('rawPlays') or {}
-    # Find the last play across all innings (most recent = current at-bat)
-    last_play = None
-    last_key = (-1, -1, -1)  # (inning, half_ord, seq)
-    if raw_plays:
-        for inn_k, play_list in raw_plays.items():
-            try:
-                inn_num = int(inn_k)
-            except (ValueError, TypeError):
-                continue
-            if not isinstance(play_list, list):
-                continue
-            for p in play_list:
-                if p.get('playtype') in ('TURNOVR', 'SCOREADJ', 'INNINGS_ADVANCE'):
-                    continue
-                half_ord = 1 if p.get('homeTeam') else 0
-                seq = int(p.get('sequence') or 0)
-                key = (inn_num, half_ord, seq)
-                if key > last_key:
-                    last_key = key
-                    last_play = p
+    last_key, last_play = _gwt_blob_latest_play(bs)
 
     # When an expected half is given, verify the blob's last play is for that half.
     # If it isn't, the blob is stale (left over from a previous at-bat) — ignore it.
@@ -318,42 +444,6 @@ def _live_count_from_blob(game, expected_inn=None, expected_half_ord=None):
     return (b_int, s_int, np_val)
 
 
-def _live_status_from_blob(game):
-    """Return current live status fields from synced GWT blob, if available."""
-    if not game.gwt_bs_blob:
-        return None
-    try:
-        bs = json_mod.loads(game.gwt_bs_blob)
-    except (json_mod.JSONDecodeError, TypeError):
-        return None
-    ei = bs.get('eventInfo') or {}
-    try:
-        inning = int(ei.get('statusPeriod'))
-    except (TypeError, ValueError):
-        return None
-
-    is_home_off = ei.get('isHomeOffensive')
-    if isinstance(is_home_off, str):
-        is_home_off = is_home_off.strip().lower() in ('1', 'true', 'yes', 'y', 'on')
-    else:
-        is_home_off = bool(is_home_off)
-
-    def _to_int(v, default=0):
-        try:
-            return int(v)
-        except (TypeError, ValueError):
-            return default
-
-    return {
-        'inning': inning,
-        'vh': 'H' if is_home_off else 'V',
-        'outs': _to_int(ei.get('currentCountOuts'), 0),
-        'b': _to_int(ei.get('ballOnCurrentPlay'), 0),
-        's': _to_int(ei.get('strikesOnCurrentPlay'), 0),
-        'np': _to_int(ei.get('pitchesNumberOnCurrentPlay'), 0),
-    }
-
-
 def _balls_strikes_from_pitch_sequence(raw):
     """Derive (balls, strikes) from GWT pitch sequence. Used for status and pitches b/s attributes."""
     if not raw or not str(raw).strip():
@@ -397,7 +487,7 @@ def _balls_strikes_from_pitch_sequence(raw):
 
 
 def _decode_pitch_sequence(raw):
-    """Convert GWT numeric pitch sequence (0422/0222/0122/...) to PrestoSports letter format (BBSFKP)."""
+    """Convert GWT numeric pitch sequence (0422/0222/0122/...) to Gameday Stats letter format (BBSFKP)."""
     if not raw or not raw.strip():
         return ''
     raw = raw.strip()
@@ -421,6 +511,8 @@ def _decode_pitch_sequence(raw):
 
 def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_plays=None, all_plays=None):
     is_vis = (vh == 'V')
+    sport_id = game.season.sport_id if game.season else 1
+    rules_val = game.season.rules if game.season else ""
     # Build sub_order: player_id -> 1, 2, ... by order of SUB plays for this team
     sub_order_map = {}
     if all_plays and team:
@@ -444,14 +536,27 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
                         sub_num += 1
                         sub_order_map[pl.id] = sub_num
                     break
-    runs   = (game.visitor_runs   if is_vis else game.home_runs)   or 0
+    # Runs: recompute from innings so total matches linescore (X/99 = 0)
+    def _inn_for_sum(score):
+        if score in ('X', '99', 99):
+            return 0
+        try:
+            return int(score or 0)
+        except (TypeError, ValueError):
+            return 0
+    inn_map_runs = {i.inning: i for i in game.innings} if game.innings else {}
+    if inn_map_runs:
+        runs = sum(_inn_for_sum(inn_map_runs[n].visitor_score if is_vis else inn_map_runs[n].home_score)
+                  for n in inn_map_runs)
+    else:
+        runs = (game.visitor_runs if is_vis else game.home_runs) or 0
     hits   = (game.visitor_hits   if is_vis else game.home_hits)   or 0
     errs   = (game.visitor_errors if is_vis else game.home_errors) or 0
     lob    = (game.visitor_lob    if is_vis else game.home_lob)    or 0
     record = (game.visitor_record if is_vis else game.home_record) or ''
 
     team_id_val = _xml_team_id(team)
-    # Use school RPI as the PrestoSports team code if available
+    # Use school RPI as the Gameday Stats team code if available
     code_val    = (team.school.rpi if team.school and team.school.rpi else None) or team.code or ''
 
     t_elem = ET.SubElement(parent, 'team')
@@ -489,18 +594,34 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
         )
         x_inn = last_inn if home_did_not_bat else None
 
+        def _score_display(score, is_home_team):
+            if score in ('X', '99'):
+                return 'X'
+            if score == 99:
+                return 'X'
+            return str(score or 0)
         line_parts = []
         for n in range(1, num_inns + 1):
             if n in inn_map:
                 score = inn_map[n].visitor_score if is_vis else inn_map[n].home_score
-                val = score or 0
+                val = _score_display(score, not is_vis)
             else:
-                val = 0
+                val = '0'
             if n == x_inn and not is_vis:
                 line_parts.append('X')
             else:
-                line_parts.append(str(val))
+                line_parts.append(val)
         line_str = ','.join(line_parts)
+        # Recompute runs from linescore so X/99 never inflate the total
+        def _score_for_sum(s):
+            if s in ('X', '99') or s == 99:
+                return 0
+            try:
+                return int(s or 0)
+            except (TypeError, ValueError):
+                return 0
+        runs = sum(_score_for_sum(inn_map[n].visitor_score if is_vis else inn_map[n].home_score)
+                   for n in inn_map)
 
     ls = ET.SubElement(t_elem, 'linescore')
     ls.set('line', line_str)
@@ -520,7 +641,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             li.set('score', 'X')
         elif n in inn_map:
             score = inn_map[n].visitor_score if is_vis else inn_map[n].home_score
-            li.set('score', str(score or 0))
+            li.set('score', 'X' if score in ('X', '99') or score == 99 else str(score or 0))
         else:
             li.set('score', '0')
 
@@ -544,6 +665,39 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
         all_plays or [], game, team, is_vis, game.home_team, game.visitor_team
     ) if all_plays and game.home_team and game.visitor_team else ({}, {})
 
+    # Build pitcher appearance order
+    pitcher_order_map = {}
+    ordered_pids = []
+    # 1. Starting pitcher(s) first
+    for ps in sorted([s for s in pit_stats if s.gs], key=lambda x: x.id):
+        if ps.player_id not in pitcher_order_map:
+            ordered_pids.append(ps.player_id)
+            pitcher_order_map[ps.player_id] = len(ordered_pids)
+    # 2. Others in order of appearance in plays
+    if all_plays:
+        pit_name_map = {} # name -> player_id
+        for ps in pit_stats:
+            if ps.player:
+                for n in [ps.player.name, _short_name(ps.player), _presto_name(ps.player)]:
+                    if n: pit_name_map[n.strip()] = ps.player_id
+        
+        for p in all_plays:
+            pn = (p.pitcher_name or '').strip()
+            if pn:
+                pid = None
+                for name, _pid in pit_name_map.items():
+                    if pn == name or pn in name or name in pn:
+                        pid = _pid
+                        break
+                if pid and pid not in pitcher_order_map:
+                    ordered_pids.append(pid)
+                    pitcher_order_map[pid] = len(ordered_pids)
+    # 3. Fallback for any remaining pit_stats not in plays
+    for ps in sorted(pit_stats, key=lambda x: x.id):
+        if ps.player_id not in pitcher_order_map:
+            ordered_pids.append(ps.player_id)
+            pitcher_order_map[ps.player_id] = len(ordered_pids)
+
     # ── Starters (schema: spots 1–9 + 10 for DH/FLEX) ─────────────────────────
     starters_elem = ET.SubElement(t_elem, 'starters')
     batords_elem  = ET.SubElement(t_elem, 'batords')
@@ -563,7 +717,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             name = (pl.get('completeName') or '').strip() if pl else ''
             uni_str = str(uni) if uni is not None else ''
             pos_num = (pl.get('playedPosition') or pl.get('starterPosition') or pl.get('defPosition')) if pl else None
-            pos = _BLOB_POS_MAP.get(pos_num, '') if pos_num is not None else ''
+            pos = _get_pos_string(pos_num, sport_id) if pos_num is not None else ''
             bo = ET.SubElement(batords_elem, 'batord')
             bo.set('spot', str(spot_idx))
             bo.set('name', name)
@@ -581,7 +735,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             name = (pl.get('completeName') or '').strip()
             uni_str = str(pl.get('uniform') or '')
             pos_num = pl.get('starterPosition') or pl.get('playedPosition') or pl.get('defPosition')
-            pos = _BLOB_POS_MAP.get(pos_num, '') if pos_num is not None else ''
+            pos = _get_pos_string(pos_num, sport_id) if pos_num is not None else ''
             st = ET.SubElement(starters_elem, 'starter')
             st.set('spot', str(spot))
             st.set('name', name)
@@ -608,11 +762,21 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             bo.set('pos',  pos)
 
     # ── Totals ─────────────────────────────────────────────────────────────
+    team_bat_plays = []
+    team_pit_plays = []
+    if all_plays:
+        for p in all_plays:
+            half = (p.half or '').lower()
+            if (half == 'top' and is_vis) or (half == 'bottom' and not is_vis):
+                team_bat_plays.append(p)
+            else:
+                team_pit_plays.append(p)
+
     totals = ET.SubElement(t_elem, 'totals')
 
     # Hitting totals
     ht = ET.SubElement(totals, 'hitting')
-    _hitting_totals(ht, bat_stats, all_plays=all_plays)
+    _hitting_totals(ht, bat_stats, team_plays=team_bat_plays)
 
     # Fielding totals
     ft = ET.SubElement(totals, 'fielding')
@@ -625,8 +789,8 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
     h_ground = str(sum(getattr(b, 'ground', 0) or 0 for b in bat_stats))
     h_lob = str(lob)  # game.visitor_lob or home_lob
     for k, v in [
-        ('adv', '0'), ('fly', h_fly), ('ground', h_ground), ('lob', h_lob),
-        ('rcherr', '0'), ('rchfc', '0'), ('vsleft', '0,0'), ('advops', '0,0'),
+        ('fly', h_fly), ('ground', h_ground), ('lob', h_lob),
+        ('rcherr', '0'), ('vsleft', '0,0'), ('advops', '0,0'),
         ('leadoff', '0,0'), ('pinchhit', '0,0'), ('w2outs', '0,0'),
         ('wloaded', '0,0'), ('wrbiops', '0,0'), ('wrunners', '0,0'), ('rbi3rd', '0,0'),
     ]:
@@ -634,7 +798,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
 
     # Pitching totals (use play-derived IP when available to fix inflated GWT accumulation)
     pt = ET.SubElement(totals, 'pitching')
-    _pitching_totals(pt, pit_stats, ip_from_plays=ip_from_plays)
+    _pitching_totals(pt, pit_stats, ip_from_plays=ip_from_plays, team_pit_plays=team_pit_plays)
 
     # Pitching situational summary — use aggregated stats where available
     psi = ET.SubElement(totals, 'psitsummary')
@@ -643,13 +807,13 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
     p_pitches = str(sum(getattr(p, 'pitches', 0) or 0 for p in pit_stats))
     p_strikes = str(sum(getattr(p, 'strikes', 0) or 0 for p in pit_stats))
     for k, v in [
-        ('fly', p_fly), ('ground', p_ground), ('picked', '0'),
+        ('fly', p_fly), ('ground', p_ground),
         ('leadoff', '0,0'), ('wrunners', '0,0'), ('vsleft', '0,0'), ('w2outs', '0,0'),
         ('pitches', p_pitches), ('strikes', p_strikes),
     ]:
         psi.set(k, v)
 
-    # ── Roster players (exact PrestoSports schema) ───────────────────────────
+    # ── Roster players (exact Gameday Stats schema) ───────────────────────────
     # Only count as "played" (gp=1) players who actually participated: starters,
     # subs, or pitchers. Lineup placeholders (BattingStats with is_starter=False,
     # is_sub=False) should get gp=0.
@@ -682,14 +846,44 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
         ps = ps_map.get(player.id)
         # Only use batting_order if it's a valid spot (1-10); -1/0 = didn't bat. 10 = FLEX.
         spot = str(bs.batting_order) if bs and bs.batting_order and 1 <= bs.batting_order <= 10 else '0'
-        pos = (((bs.position if bs else None) or player.position or '') if has_stats else '').lower()
         code = spot if has_stats and bs and bs.batting_order and 1 <= bs.batting_order <= 10 else ''
-        is_pitcher = ps or (pos == 'p')
-        # Compound pos for two-way players (e.g. p/rf when they pitch and also play RF)
-        if has_stats and is_pitcher and pos and pos not in ('p', 'ph', 'pr') and '/' not in pos:
-            pos = f"p/{pos}"
+        pos = (((bs.position if bs else None) or player.position or '') if has_stats else '').lower()
+        
+        # Map synonymous positions to standard Presto codes
+        _POS_MAP = {
+            'pitcher': 'p', 'catcher': 'c', '1st base': '1b', '2nd base': '2b', '3rd base': '3b',
+            'shortstop': 'ss', 'left field': 'lf', 'center field': 'cf', 'right field': 'rf',
+            'pinch hitter': 'ph', 'pinch runner': 'pr', 'designated hitter': 'dh' if sport_id != 11 else 'dp',
+            'designated player': 'dp',
+        }
+        def _std_pos(p):
+            p = (p or '').strip().lower()
+            return _POS_MAP.get(p, p)
+
+        # Collect all positions from fielding records
+        fld_agg = fld_list_by_player.get(player.id)
+        all_fpos = set()
+        if fld_agg:
+            for f in fld_agg:
+                if f.position:
+                    for p_part in f.position.split('/'):
+                        all_fpos.add(_std_pos(p_part))
+        if pos:
+            for p_part in pos.split('/'):
+                all_fpos.add(_std_pos(p_part))
+        
+        is_pitcher = ps or (_std_pos(pos) == 'p') or ('p' in all_fpos)
+        if is_pitcher:
+            all_fpos.add('p')
+            
+        # Reconstruct pos string from all unique positions found
+        if has_stats and all_fpos:
+            # Sort to keep 'p' first if present, then others
+            sorted_fpos = sorted(list(all_fpos), key=lambda x: (0 if x == 'p' else 1, x))
+            pos = '/'.join(sorted_fpos)
         elif has_stats and is_pitcher and not pos:
             pos = 'p'
+
         # atpos = actual batting position (Presto format): p, ph, dh, rf, cf, etc.
         if not has_stats:
             atpos = ''
@@ -697,12 +891,13 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             atpos = pos
         elif '/' in pos:
             parts = [p.strip().lower() for p in pos.split('/')]
+            # Presto typically uses the first non-'p' position as atpos if they played multiple
             non_p = [p for p in parts if p and p != 'p']
             atpos = non_p[0] if non_p else (parts[0] if parts else '')
         else:
             atpos = pos if pos else ('p' if is_pitcher else '')
 
-        # Attribute order matches PrestoSports exactly:
+        # Attribute order matches Gameday Stats exactly:
         # gp=1: name, shortname, revname, uni, gp, gs, spot, code, bats, throws, [class], pos, playerId, atpos
         # gp=0: name, shortname, revname, uni, gp, pos, spot, code, bats, throws, [class]
         p_elem = ET.SubElement(t_elem, 'player')
@@ -719,8 +914,6 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             p_elem.set('code',  code)
             p_elem.set('bats',  player.bats or 'R')
             p_elem.set('throws', player.throws or 'R')
-            if player.player_class and str(player.player_class).strip():
-                p_elem.set('class', str(player.player_class).strip())
             p_elem.set('pos',   pos)
             p_elem.set('playerId', _player_id(player))
             p_elem.set('atpos', atpos)
@@ -730,11 +923,12 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
             p_elem.set('code',  code)
             p_elem.set('bats',  player.bats or 'R')
             p_elem.set('throws', player.throws or 'R')
-            if player.player_class and str(player.player_class).strip():
-                p_elem.set('class', str(player.player_class).strip())
 
         if has_stats:
-            _player_hitting_schema(p_elem, bs)
+            h_game_stats = None
+            if hitter_splits and player.id in hitter_splits:
+                h_game_stats = next((s for c, e, s in hitter_splits[player.id] if c == 'game'), None)
+            _player_hitting_schema(p_elem, bs, hitter_game_stats=h_game_stats)
             fld_agg = fld_list_by_player.get(player.id)
             if fld_agg:
                 class _AggFld:
@@ -754,33 +948,87 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
                 _player_fielding_schema(p_elem, fld_map.get(player.id))
             hsi_p = ET.SubElement(p_elem, 'hsitsummary')
             hsi_p.text = ''
-            gnd = str(getattr(bs, 'ground', 0) or 0) if bs else '0'
-            fly_val = str(getattr(bs, 'fly', 0) or 0) if bs else '0'
-            for k, v in [
-                ('ground', gnd), ('fly', fly_val),
+            gnd = int(getattr(bs, 'ground', 0) or 0) if bs else 0
+            fly_val = int(getattr(bs, 'fly', 0) or 0) if bs else 0
+            # Numeric attrs: only when > 0
+            if gnd > 0:
+                hsi_p.set('ground', str(gnd))
+            if fly_val > 0:
+                hsi_p.set('fly', str(fly_val))
+            # Pair attrs (x,y): only when not '0,0'
+            for k, val in [
                 ('advops', '0,0'), ('leadoff', '0,0'), ('wrunners', '0,0'),
                 ('w2outs', '0,0'), ('pinchhit', '0,0'), ('wrbiops', '0,0'),
-                ('rbi3rd', '0,0'), ('wloaded', '0,0'), ('lob', '0'),
-                ('adv', '0'), ('rcherr', '0'), ('rchfc', '0'), ('vsleft', '0,0'),
+                ('rbi3rd', '0,0'), ('wloaded', '0,0'), ('vsleft', '0,0'),
             ]:
-                hsi_p.set(k, v)
+                if val != '0,0':
+                    hsi_p.set(k, val)
+            # Other numeric attrs: only when > 0
+            for k, val in [('lob', '0'), ('adv', '0'), ('rcherr', '0'), ('rchfc', '0')]:
+                if val != '0':
+                    hsi_p.set(k, val)
             bat_agg = _agg_batting(player.id, game_ids)
             _add_hitseason(p_elem, bat_agg)
             if is_pitcher:
                 if ps:
-                    _player_pitching_schema(p_elem, ps, ip_override=ip_from_plays.get(ps.player_id))
                     pit_agg = _agg_pitching(player.id, game_ids)
-                    _add_pchseason(p_elem, pit_agg)
+                    p_game_stats = None
+                    if pitcher_splits and player.id in pitcher_splits:
+                        p_game_stats = next((s for c, e, s in pitcher_splits[player.id] if c == 'game'), None)
+                    
+                    # Compute psitsummary situation values from play-by-play
+                    _pch_name = (ps.player.name or '') if ps.player else ''
+                    _pch_plays = [p for p in (all_plays or [])
+                                  if p.pitcher_name and _pch_name and
+                                  (p.pitcher_name.strip() == _pch_name or
+                                   _pch_name in p.pitcher_name or p.pitcher_name in _pch_name)]
+
+                    # Compute strikes: use stored value; fall back to counting from pitch sequences
+                    _strikes_val = ps.strikes or 0
+                    if not _strikes_val and (ps.pitches or 0) > 0:
+                        _STRIKE_CODES = frozenset('KkSsFfTtCcPpLlQqRrMmNn')
+                        for _pp in _pch_plays:
+                            if _pp.pitch_sequence:
+                                _strikes_val += sum(1 for c in str(_pp.pitch_sequence) if c in _STRIKE_CODES)
+                    
+                    # Appearance order from map
+                    _appear_order = str(pitcher_order_map.get(player.id, 1))
+                    
+                    _player_pitching_schema(p_elem, ps, ip_override=ip_from_plays.get(ps.player_id), pit_agg=pit_agg, pitcher_game_stats=p_game_stats, strikes_override=_strikes_val, appear_override=_appear_order)
+                    _add_pchseason(p_elem, pit_agg, sport_id=sport_id, rules=rules_val)
+                    
+                    _is_batter_play = lambda p: bool(p.batter_name and (p.action_type or '').upper() not in ('SUB', 'R:', 'B:') and not (p.action_type or '').startswith('R:') and not (p.action_type or '').startswith('B:'))
+                    _leadoff_ops, _leadoff_h = 0, 0
+                    _wrunners_ops, _wrunners_h = 0, 0
+                    _w2outs_ops, _w2outs_h = 0, 0
+                    for _pp in _pch_plays:
+                        if not _is_batter_play(_pp):
+                            continue
+                        _has_runner = bool(_pp.runner_first or _pp.runner_second or _pp.runner_third)
+                        _outs_b = _pp.outs_before or 0
+                        _reached = (_pp.outs_on_play or 0) == 0 and (_pp.action_type or '') not in ('K', 'KL', 'KS')
+                        if _outs_b == 0:
+                            _leadoff_ops += 1
+                            if _reached:
+                                _leadoff_h += 1
+                        if _has_runner:
+                            _wrunners_ops += 1
+                            if _reached:
+                                _wrunners_h += 1
+                        if _outs_b == 2:
+                            _w2outs_ops += 1
+                            if _reached:
+                                _w2outs_h += 1
+                    
                     psi = ET.SubElement(p_elem, 'psitsummary')
-                    psi.set('fly',     str(ps.fly or 0))
-                    psi.set('ground',  str(ps.ground or 0))
-                    psi.set('picked',  '0')
-                    psi.set('leadoff', '0,0')
-                    psi.set('wrunners', '0,0')
-                    psi.set('w2outs',  '0,0')
-                    psi.set('vsleft',  '0,0')
-                    psi.set('pitches', str(ps.pitches or 0))
-                    psi.set('strikes', str(ps.strikes or 0))
+                    psi.set('fly',      str(ps.fly or 0))
+                    psi.set('ground',   str(ps.ground or 0))
+                    psi.set('picked',   '0')
+                    psi.set('leadoff',  f"{_leadoff_h},{_leadoff_ops}")
+                    psi.set('wrunners', f"{_wrunners_h},{_wrunners_ops}")
+                    psi.set('w2outs',   f"{_w2outs_h},{_w2outs_ops}")
+                    psi.set('pitches',  str(ps.pitches or 0))
+                    psi.set('strikes',  str(_strikes_val))
                 else:
                     # Pitcher starter with no PitchingStats yet — add default elements like reference
                     p = ET.SubElement(p_elem, 'pitching')
@@ -795,7 +1043,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
                     p.set('r',      '0')
                     p.set('so',     '0')
                     p.set('whip',   '.00')
-                    _add_pchseason(p_elem, {})  # empty agg → empty pchseason format
+                    _add_pchseason(p_elem, {}, sport_id=sport_id, rules=rules_val)  # empty agg → empty pchseason format
                     psi = ET.SubElement(p_elem, 'psitsummary')
                     psi.set('fly',     '0')
                     psi.set('ground',  '0')
@@ -803,7 +1051,6 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
                     psi.set('leadoff', '0,0')
                     psi.set('wrunners', '0,0')
                     psi.set('w2outs',  '0,0')
-                    psi.set('vsleft',  '0,0')
                     psi.set('pitches', '0')
                     psi.set('strikes', '0')
 
@@ -868,7 +1115,7 @@ def _build_situation_splits_from_plays(all_plays, game, team, is_vis, home, vis)
         r2 = bool((play.runner_second or '').strip())
         r3 = bool((play.runner_third or '').strip())
         outs = play.outs_before or 0
-        ctxs = []
+        ctxs = ['game']  # Game totals for hitdp/hittp/picked calculation
         if outs == 0:
             ctxs.append('leadoff')
         if not r1 and not r2 and not r3:
@@ -917,7 +1164,9 @@ def _build_situation_splits_from_plays(all_plays, game, team, is_vis, home, vis)
         out = 1 if (base in ('K', 'KS', 'KL') or (len(base) >= 1 and base[0].isdigit()) or
                     (len(base) >= 2 and base[0] in 'FP' and base[-1].isdigit()) or 'DP' in raw or 'TP' in raw) else 0
         dp = 1 if 'DP' in raw or 'TP' in raw else 0
-        return dict(ab=ab, r=0, h=h, rbi=rbi, so=so, kl=kl, gdp=gdp, ground=ground, fly=fly, bb=bb, hbp=hbp, sb=sb, cs=cs, out=out, dp=dp)
+        tp = 1 if 'TP' in raw else 0
+        picked = 1 if 'PO' in raw or 'PICKED OFF' in (play.narrative or '').upper() else 0
+        return dict(ab=ab, r=0, h=h, rbi=rbi, so=so, kl=kl, gdp=gdp, ground=ground, fly=fly, bb=bb, hbp=hbp, sb=sb, cs=cs, out=out, dp=dp, tp=tp, picked=picked)
 
     def _parse_pitcher_outcome(play):
         raw = (play.action_type or '').upper()
@@ -935,11 +1184,12 @@ def _build_situation_splits_from_plays(all_plays, game, team, is_vis, home, vis)
         so = 1 if base in ('K', 'KS', 'KL') else 0
         fly = 1 if base and base[0] in ('F', 'P', 'L') and len(base) >= 2 and base[-1].isdigit() else 0
         ground = 1 if 'GO' in raw or (base and base[0] == 'G') or 'ground' in (play.narrative or '').lower() else 0
-        ip = (play.outs_on_play or 1) / 3.0 if play.outs_on_play else (1/3 if ab or bb else 0)
+        ip = (play.outs_on_play or 0) / 3.0
         hr = 1 if base == 'HR' else 0
         double = 1 if base == '2B' else 0
         triple = 1 if base == '3B' else 0
-        return dict(bb=bb, ab=ab, bf=1, ip=ip, h=h, er=er, so=so, fly=fly, ground=ground, hr=hr, double=double, triple=triple)
+        picked = 1 if 'PO' in raw or 'PICKED OFF' in (play.narrative or '').upper() else 0
+        return dict(bb=bb, ab=ab, bf=1, ip=ip, h=h, er=er, so=so, fly=fly, ground=ground, hr=hr, double=double, triple=triple, picked=picked)
 
     for play in all_plays:
         if (play.action_type or '').upper() == 'SUB':
@@ -977,7 +1227,7 @@ def _build_situation_splits_from_plays(all_plays, game, team, is_vis, home, vis)
                 if bid not in hitter_splits:
                     hitter_splits[bid] = {}
                 if skey not in hitter_splits[bid]:
-                    hitter_splits[bid][skey] = dict(ab=0, r=0, h=0, rbi=0, so=0, kl=0, gdp=0, ground=0, fly=0, bb=0, hbp=0, sb=0, cs=0, out=0, dp=0, **_dict(extra))
+                    hitter_splits[bid][skey] = dict(ab=0, r=0, h=0, rbi=0, so=0, kl=0, gdp=0, ground=0, fly=0, bb=0, hbp=0, sb=0, cs=0, out=0, dp=0, tp=0, picked=0, **_dict(extra))
                 for k, v in outcome.items():
                     hitter_splits[bid][skey][k] = hitter_splits[bid][skey].get(k, 0) + v
 
@@ -991,7 +1241,7 @@ def _build_situation_splits_from_plays(all_plays, game, team, is_vis, home, vis)
                 if pid not in pitcher_splits:
                     pitcher_splits[pid] = {}
                 if skey not in pitcher_splits[pid]:
-                    pitcher_splits[pid][skey] = dict(bb=0, ab=0, bf=0, ip=0.0, h=0, er=0, so=0, fly=0, ground=0, hr=0, double=0, triple=0, **_dict(extra))
+                    pitcher_splits[pid][skey] = dict(bb=0, ab=0, bf=0, ip=0.0, h=0, er=0, so=0, fly=0, ground=0, hr=0, double=0, triple=0, picked=0, **_dict(extra))
                 for k, v in outcome.items():
                     if k in pitcher_splits[pid][skey]:
                         if k == 'ip':
@@ -1034,7 +1284,7 @@ def _add_situation_placeholders(p_elem, bs, fld_list, ps, spot, pos, hitter_spli
         h_items = hitter_splits if isinstance(hitter_splits, list) else []
         if not h_items:
             pos_attr = (pos.split('/')[-1] if pos and '/' in pos else pos) or ''
-            base_vals = dict(ab=v('ab'), r=v('r'), h=v('h'), rbi=v('rbi'), so=v('so'), out='0', kl=v('kl'), gdp=v('gdp'), ground=v('ground'), fly=v('fly'), bb=v('bb'), hbp=v('hbp'))
+            base_vals = dict(ab=v('ab'), r=v('r'), h=v('h'), rbi=v('rbi'), so=v('so'), out='0', kl=v('kl'), gdp=v('gdp'), ground=v('ground'), fly=v('fly'), bb=v('bb'), hbp=v('hbp'), double=v('doubles'), triple=v('triples'), hr=v('hr'), sf=v('sf'), sh=v('sh'), ibb=v('ibb'), rcherr=v('rcherr'), rchfc=v('rchfc'), ue=v('ue'))
             base_vals = {k: v for k, v in base_vals.items() if v is not None}
             h_items = [
                 ('leadoff', {}, base_vals),
@@ -1057,8 +1307,11 @@ def _add_situation_placeholders(p_elem, bs, fld_list, ps, spot, pos, hitter_spli
             for k, ev in extra.items():
                 if ev:
                     h.set(k, str(ev))
-            for k in ['ab', 'r', 'h', 'rbi', 'so', 'kl', 'gdp', 'ground', 'fly', 'bb', 'hbp', 'sb', 'cs', 'out', 'dp']:
+            for k in ['ab', 'r', 'h', 'rbi', 'out']:
                 if k in vals and vals[k] is not None:
+                    h.set(k, str(vals[k]))
+            for k in ['so', 'kl', 'gdp', 'ground', 'fly', 'bb', 'hbp', 'sb', 'cs', 'dp', 'double', 'triple', 'hr', 'sf', 'sh', 'ibb', 'rcherr', 'rchfc', 'ue']:
+                if k in vals and vals[k] is not None and str(vals[k]) not in ('0', ''):
                     h.set(k, str(vals[k]))
 
     # fsituation: one per position (Presto: multiple when player plays multiple positions)
@@ -1070,15 +1323,19 @@ def _add_situation_placeholders(p_elem, bs, fld_list, ps, spot, pos, hitter_spli
         fs = ET.SubElement(p_elem, 'fsituation')
         fs.set('context', 'bypos')
         fs.set('pos', fpos)
-        for attr in ['a', 'e', 'po', 'indp', 'pb', 'csb', 'sba']:
+        for attr in ['a', 'e', 'po']:
             val = getattr(fld, attr, 0) or 0
             fs.set(attr, str(val))
+        for attr in ['indp', 'pb', 'csb', 'sba', 'ci']:
+            val = getattr(fld, attr, 0) or 0
+            if val > 0:
+                fs.set(attr, str(val))
 
     # psituation: from play splits when available
     if ps:
         p_items = pitcher_splits if isinstance(pitcher_splits, list) else []
         if not p_items:
-            base_p = dict(bb=pv('bb'), ab=pv('ab'), bf=pv('bf'), ip=pv('ip'), h=pv('h'), er=pv('er'), so=pv('so'), fly=pv('fly'), ground=pv('ground'))
+            base_p = dict(bb=pv('bb'), ab=pv('ab'), bf=pv('bf'), ip=pv('ip'), h=pv('h'), er=pv('er'), so=pv('so'), fly=pv('fly'), ground=pv('ground'), hr=pv('hr'), double=pv('doubles'), triple=pv('triples'), r=pv('r'), cia=pv('cia'), gdp=pv('gdp'), hbp=pv('hbp'), csb=pv('csb'), kl=pv('kl'), ibb=pv('ibb'), wp=pv('wp'), inn=pv('inn'))
             p_items = [
                 ('leadoff', {}, base_p),
                 ('empty', {}, base_p),
@@ -1093,9 +1350,14 @@ def _add_situation_placeholders(p_elem, bs, fld_list, ps, spot, pos, hitter_spli
             for k, ev in extra.items():
                 if ev:
                     p.set(k, str(ev))
-            for k in ['bb', 'ab', 'bf', 'ip', 'h', 'er', 'so', 'fly', 'ground', 'hr', 'double', 'triple']:
+            for k in ['bb', 'bf', 'ip', 'h', 'er', 'so', 'r']:
                 if k in vals and vals[k] is not None:
-                    p.set(k, str(vals[k]) if k != 'ip' else f'{vals[k]:.1f}' if isinstance(vals[k], (int, float)) else str(vals[k]))
+                    p.set(k, _fmt_ip(vals[k]) if k == 'ip' else str(vals[k]))
+            for k in ['ab', 'fly', 'ground', 'hr', 'double', 'triple', 'cia', 'gdp', 'hbp', 'csb', 'kl', 'ibb', 'wp', 'inn']:
+                if k in vals and vals[k] is not None:
+                    val_str = str(vals[k])
+                    if val_str not in ('0', '0.0', ''):
+                        p.set(k, val_str)
 
 
 def _fill_hitting(parent, bs):
@@ -1117,7 +1379,6 @@ def _fill_hitting(parent, bs):
     h.set('so',     v('so'))
     h.set('gdp',    v('gdp'))
     h.set('ibb',    v('ibb'))
-    h.set('picked', '0')
     h.set('ground', v('ground'))
     h.set('fly',    v('fly'))
     h.set('kl',     v('kl'))
@@ -1156,7 +1417,6 @@ def _fill_pitching_stat(parent, ps):
     p.set('so',      v('so'))
     p.set('triple',  v('triples'))
     p.set('wp',      v('wp'))
-    p.set('picked',  '0')
     p.set('sha',     '0')
     p.set('sfa',     '0')
     p.set('gdp',     v('gdp') if hasattr(ps, 'gdp') else '0')
@@ -1170,13 +1430,26 @@ def _fill_pitching_stat(parent, ps):
     p.set('save',    '1' if ps.save else '0')
 
 
-def _hitting_totals(elem, bat_stats, all_plays=None):
+def _hitting_totals(elem, bat_stats, team_plays=None):
     def s(attr): return str(sum(getattr(b, attr, 0) or 0 for b in bat_stats))
-    # hitdp = GDP count; hittp = triple play count (from plays if available)
-    hitdp_val = s('gdp')
-    hittp_val = '0'
-    if all_plays:
-        hittp_val = str(sum(1 for p in all_plays if (p.action_type or '').upper().startswith('TP') or 'TP' in (p.action_type or '')))
+    # hitdp = sum of all double plays hit into; hittp = triple plays
+    # picked = times picked off (sum from plays)
+    hitdp_val = 0
+    hittp_val = 0
+    picked_val = 0
+    if team_plays:
+        for p in team_plays:
+            raw = (p.action_type or '').upper()
+            if 'GDP' in raw or 'DP' in raw:
+                hitdp_val += 1
+            if 'TP' in raw:
+                hittp_val += 1
+            # Pickoffs: search narrative or action_type
+            if 'PO' in raw or 'PICKED OFF' in (p.narrative or '').upper():
+                # Note: this might count pickoffs where this team was pitching too if not careful.
+                # But team_plays are only when this team was BATTING.
+                picked_val += 1
+
     elem.set('ab',     s('ab'))
     elem.set('r',      s('r'))
     elem.set('h',      s('h'))
@@ -1193,12 +1466,12 @@ def _hitting_totals(elem, bat_stats, all_plays=None):
     elem.set('so',     s('so'))
     elem.set('gdp',    s('gdp'))
     elem.set('ibb',    s('ibb'))
-    elem.set('picked', '0')
+    elem.set('picked', str(picked_val))
     elem.set('ground', s('ground'))
     elem.set('fly',    s('fly'))
     elem.set('kl',     s('kl'))
-    elem.set('hitdp',  hitdp_val)
-    elem.set('hittp',  hittp_val)
+    elem.set('hitdp',  str(hitdp_val))
+    elem.set('hittp',  str(hittp_val))
 
 
 def _fielding_totals(elem, fld_list):
@@ -1208,13 +1481,13 @@ def _fielding_totals(elem, fld_list):
     elem.set('e',  s('e'))
     elem.set('pb', s('pb'))
     elem.set('ci', s('ci'))
-    elem.set('indp', s('indp'))
-    elem.set('intp', s('intp'))
-    elem.set('csb', s('csb'))
-    elem.set('sba', s('sba'))
+    for attr in ['indp', 'intp', 'csb', 'sba']:
+        val = sum(getattr(f, attr, 0) or 0 for f in fld_list)
+        if val > 0:
+            elem.set(attr, str(val))
 
 
-def _pitching_totals(elem, pit_stats, ip_from_plays=None):
+def _pitching_totals(elem, pit_stats, ip_from_plays=None, team_pit_plays=None):
     ip_from_plays = ip_from_plays or {}
     def s(attr): return str(sum(getattr(p, attr, 0) or 0 for p in pit_stats))
     # Sum IP properly (each .1 = 1/3 inning); use play-derived IP when available
@@ -1228,33 +1501,30 @@ def _pitching_totals(elem, pit_stats, ip_from_plays=None):
     ip_frac = total_thirds % 3
     ip_str  = f"{ip_full}.{ip_frac}"
 
-    sho_val = '1' if not pit_stats else ('1' if all((p.sho or 0) for p in pit_stats) else '0')
+    picked_val = 0
+    if team_pit_plays:
+        for p in team_pit_plays:
+            raw = (p.action_type or '').upper()
+            if 'PO' in raw or 'PICKED OFF' in (p.narrative or '').upper():
+                picked_val += 1
 
     elem.set('ip',      ip_str)
     elem.set('ab',      s('ab'))
     elem.set('bb',      s('bb'))
     elem.set('bf',      s('bf'))
     elem.set('bk',      s('bk'))
-    elem.set('double',  s('doubles'))
-    elem.set('er',      s('er'))
-    elem.set('fly',     s('fly'))
-    elem.set('ground',  s('ground'))
-    elem.set('h',       s('h'))
-    elem.set('hbp',     s('hbp'))
-    elem.set('hr',      s('hr'))
-    elem.set('ibb',     s('ibb'))
-    elem.set('kl',      s('kl'))
-    elem.set('r',       s('r'))
-    elem.set('so',      s('so'))
-    elem.set('triple',  s('triples'))
-    elem.set('wp',      s('wp'))
-    elem.set('picked',  '0')
-    elem.set('sha',     '0')
-    elem.set('sfa',     '0')
-    elem.set('gdp',     '0')
+    
+    # Presto order: double, er, fly, ground, h, hbp, hr, ibb, kl, r, so, triple, wp
+    for attr in ['double', 'er', 'fly', 'ground', 'h', 'hbp', 'hr', 'ibb', 'kl', 'r', 'so', 'triple', 'wp']:
+        db_attr = attr + 's' if attr in ('double', 'triple') else attr
+        elem.set(attr, s(db_attr))
+
+    elem.set('picked',  str(picked_val))
+    elem.set('sha',     s('sha') if pit_stats and hasattr(pit_stats[0], 'sha') else '0')
+    elem.set('sfa',     s('sfa') if pit_stats and hasattr(pit_stats[0], 'sfa') else '0')
+    elem.set('gdp',     s('gdp') if pit_stats and hasattr(pit_stats[0], 'gdp') else '0')
     elem.set('pitches', s('pitches'))
     elem.set('strikes', s('strikes'))
-    elem.set('sho',     sho_val)
 
 
 # ── Season aggregation ───────────────────────────────────────────────────────
@@ -1298,80 +1568,150 @@ def _agg_pitching(player_id, game_ids):
         agg[attr] = sum(getattr(s, db_attr, 0) or 0 for s in stats)
     agg['win'] = sum(1 for s in stats if s.win)
     agg['loss'] = sum(1 for s in stats if s.loss)
-    total_ip = sum(s.ip or 0 for s in stats)
-    agg['ip'] = total_ip
+    agg['save'] = sum(1 for s in stats if s.save)
+    
+    total_thirds = 0
+    for s in stats:
+        ip_val = s.ip or 0
+        full_inn = int(ip_val)
+        frac = round((ip_val - full_inn) * 10)
+        # If stored as X.1, X.2 (notation), frac is 1 or 2
+        # If stored as X.33, X.66 (decimal), frac will be 3 or 7 (rounded)
+        if frac < 3:
+            total_thirds += full_inn * 3 + frac
+        else:
+            total_thirds += round(ip_val * 3)
+    
+    agg['ip'] = total_thirds / 3.0
     agg['sha'] = agg.get('sha', 0)
     agg['sfa'] = agg.get('sfa', 0)
     return agg
 
 
-# ── Player-level schema (exact PrestoSports format) ───────────────────────────
+# ── Player-level schema (exact Gameday Stats format) ───────────────────────────
 
-def _player_hitting_schema(parent, bs):
-    """Player hitting: r, h, ab, rbi, so, gdp, ground, kl, hitdp, slg, obp, ops (Presto order)."""
+def _player_hitting_schema(parent, bs, hitter_game_stats=None):
+    """Player hitting: r, h, ab, rbi, slg, obp, ops always; rest conditional on non-zero (Presto format)."""
     h = ET.SubElement(parent, 'hitting')
     if bs:
-        def v(a): return str(getattr(bs, a, 0) or 0)
-        ab = int(v('ab'))
-        r = int(v('r'))
-        hits = int(v('h'))
-        rbi = int(v('rbi'))
-        so = v('so')
-        gdp = v('gdp')
-        ground = v('ground')
-        kl = v('kl')
-        hitdp = v('gdp')  # hit into double play = gdp
+        ab = int(getattr(bs, 'ab', 0) or 0)
+        r_val = int(getattr(bs, 'r', 0) or 0)
+        hits = int(getattr(bs, 'h', 0) or 0)
+        rbi = int(getattr(bs, 'rbi', 0) or 0)
         slg = _fmt_pct3(bs.slg()) if ab > 0 else '.000'
         obp = _fmt_pct3(bs.obp()) if (ab + (bs.bb or 0) + (bs.hbp or 0) + (bs.sf or 0)) > 0 else '.000'
         ops = _fmt_pct3(bs.ops()) if ab > 0 else '.000'
     else:
-        r, hits, ab, rbi, so, gdp, ground, kl, hitdp = '0', '0', '0', '0', '0', '0', '0', '0', '0'
+        r_val, hits, ab, rbi = 0, 0, 0, 0
         slg, obp, ops = '.000', '.000', '.000'
-    h.set('r', str(r))
+    h.set('r', str(r_val))
     h.set('h', str(hits))
     h.set('ab', str(ab))
     h.set('rbi', str(rbi))
-    h.set('so', so)
-    h.set('gdp', gdp)
-    h.set('ground', ground)
-    h.set('kl', kl)
-    h.set('hitdp', hitdp)
+    if bs:
+        # Conditional attrs: only include when non-zero
+        for xml_attr, db_attr in [
+            ('double', 'doubles'), ('triple', 'triples'), ('hr', 'hr'),
+            ('bb', 'bb'), ('sb', 'sb'), ('cs', 'cs'), ('hbp', 'hbp'),
+            ('sh', 'sh'), ('sf', 'sf'), ('ibb', 'ibb'), ('so', 'so'),
+            ('gdp', 'gdp'), ('ground', 'ground'), ('kl', 'kl'), ('fly', 'fly'),
+        ]:
+            val = getattr(bs, db_attr, 0) or 0
+            if val > 0:
+                h.set(xml_attr, str(val))
+        
+        # hitdp, hittp, picked from game-total splits if available
+        if hitter_game_stats:
+            for attr in ['hitdp', 'hittp', 'picked']:
+                val = hitter_game_stats.get('dp' if attr == 'hitdp' else 'tp' if attr == 'hittp' else 'picked', 0)
+                if val > 0:
+                    h.set(attr, str(val))
+        else:
+            # Fallback to gdp for hitdp if no splits
+            gdp_val = getattr(bs, 'gdp', 0) or 0
+            if gdp_val > 0:
+                h.set('hitdp', str(gdp_val))
+
     h.set('slg', slg if isinstance(slg, str) else f"{slg:.3f}")
     h.set('obp', obp if isinstance(obp, str) else f"{obp:.3f}")
     h.set('ops', ops if isinstance(ops, str) else f"{ops:.3f}")
+    if bs:
+        for attr in ['double', 'triple', 'hr', 'bb', 'sb', 'cs', 'hbp', 'sh', 'sf', 'ibb', 'fly', 'hittp']:
+            val = getattr(bs, attr if attr != 'double' else 'doubles', 0)
+            if val and int(val) > 0:
+                h.set(attr, str(val))
 
 
 def _player_fielding_schema(parent, fld):
-    """Player fielding: po, a, e, pb, ci, sba, indp, intp, csb (Presto format)."""
+    """Player fielding: po, a, e always; pb, ci, sba, indp, csb conditional (Presto format)."""
     f = ET.SubElement(parent, 'fielding')
     def v(attr): return str(getattr(fld, attr, 0) or 0) if fld else '0'
     f.set('po', v('po'))
     f.set('a',  v('a'))
     f.set('e',  v('e'))
-    f.set('pb', v('pb'))
-    f.set('ci', v('ci'))
-    f.set('sba', v('sba'))
-    f.set('indp', v('indp'))
-    f.set('intp', v('intp'))
-    f.set('csb', v('csb'))
+    if fld:
+        for attr in ['pb', 'ci', 'sba', 'indp', 'csb']:
+            val = getattr(fld, attr, 0) or 0
+            if val > 0:
+                f.set(attr, str(val))
 
 
-def _player_pitching_schema(parent, ps, ip_override=None):
-    """Player pitching: appear, ip, gs, ab, bb, bf, er, h, r, so, whip (reference order)."""
+def _player_pitching_schema(parent, ps, ip_override=None, pit_agg=None, pitcher_game_stats=None, strikes_override=None, appear_override=None):
+    """Player pitching: appear, ip, gs, ab, bb, bf, double, er, fly, ground, h, hr, r, so, pitches, strikes, whip (Presto order)."""
     p = ET.SubElement(parent, 'pitching')
     def v(attr): return str(getattr(ps, attr, 0) or 0)
     ip_val = ip_override if ip_override is not None else ps.ip
-    p.set('appear', v('appear') if hasattr(ps, 'appear') else '1')
+    
+    # Appearance order from map, else default to "1"
+    p.set('appear', str(appear_override) if appear_override is not None else '1')
     p.set('ip',     _fmt_ip(ip_val))
-    p.set('gs',     v('gs'))
+    gs_val = int(getattr(ps, 'gs', 0) or 0)
+    if gs_val > 0:
+        p.set('gs', str(gs_val))
+    
     p.set('ab',     v('ab'))
     p.set('bb',     v('bb'))
     p.set('bf',     v('bf'))
-    p.set('er',     v('er'))
-    p.set('h',      v('h'))
-    p.set('r',      v('r'))
-    p.set('so',     v('so'))
+    
+    # Presto order: double, er, fly, ground, h, hr, r, so
+    for attr in ['double', 'er', 'fly', 'ground', 'h', 'hr', 'r', 'so']:
+        db_attr = attr + 's' if attr == 'double' else attr
+        val = getattr(ps, db_attr, 0) or 0
+        p.set(attr, str(val))
+
+    # pitches, strikes, whip
+    p.set('pitches', v('pitches'))
+    p.set('strikes', str(strikes_override) if strikes_override is not None else v('strikes'))
     p.set('whip',   f"{(ps.whip()):.2f}" if ip_val and ip_val > 0 else '.00')
+    if ps:
+        for attr in ['strikes', 'triple', 'ground', 'double', 'gdp', 'fly', 'cg', 'sho', 'pitches', 'sfa', 'hbp', 'kl', 'ibb', 'wp', 'hr', 'sha']:
+            val = getattr(ps, attr if attr not in ('double', 'triple') else attr + 's', 0)
+            if val and int(val) > 0:
+                p.set(attr, str(val))
+
+    if ps:
+        # Extra conditional attrs
+        for attr in ['triple', 'gdp', 'cg', 'sho', 'sfa', 'hbp', 'kl', 'ibb', 'wp', 'sha']:
+            db_attr = attr + 's' if attr == 'triple' else attr
+            val = getattr(ps, db_attr, 0)
+            if val and int(val) > 0:
+                p.set(attr, str(val))
+        
+        # picked (pickoffs) from game-total splits if available
+        picked_val = pitcher_game_stats.get('picked', 0) if pitcher_game_stats else (getattr(ps, 'picked', 0) or 0)
+        if picked_val > 0:
+            p.set('picked', str(picked_val))
+
+    # Win/Loss/Save as season record (e.g. win="1-0", loss="0-1", save="1")
+    w_total = pit_agg.get('win', 0) if pit_agg else (1 if ps.win else 0)
+    l_total = pit_agg.get('loss', 0) if pit_agg else (1 if ps.loss else 0)
+    s_total = pit_agg.get('save', 0) if pit_agg else (1 if ps.save else 0)
+    if ps.win:
+        p.set('win', f"{w_total}-{l_total}")
+    elif ps.loss:
+        p.set('loss', f"{w_total}-{l_total}")
+    if ps.save:
+        p.set('save', str(s_total))
 
 
 def _add_hitseason(parent, agg):
@@ -1410,7 +1750,7 @@ def _add_hitseason(parent, agg):
             h.set(attr, val)
 
 
-def _add_pchseason(parent, agg):
+def _add_pchseason(parent, agg, sport_id=1, rules=""):
     """Add pchseason element with aggregated season stats (attribute order matches reference)."""
     p = ET.SubElement(parent, 'pchseason')
     def v(a): return str(agg.get(a, 0) or 0)
@@ -1432,12 +1772,13 @@ def _add_pchseason(parent, agg):
             p.set(attr, val)
     else:
         # Full format: bb, bf, bk, hr, era, wp, bavg, ab, kl, cg, double, ip, h, ibb, k, gs, er, sha, sfa, cbo, appear, r, triple, hbp, cia, sho
-        era_val = f"{(er * 7 / (ip if ip > 0 else 1)):.2f}" if ip > 0 else '0.00'
+        era_inn = 7 if (sport_id == 11 or rules == "rules_hs_ba") else 9
+        era_val = f"{(er * era_inn / (ip if ip > 0 else 1)):.2f}" if ip > 0 else '0.00'
         for attr, val in [
             ('bb', v('bb')), ('bf', v('bf')), ('bk', v('bk')), ('hr', v('hr')),
             ('era', era_val), ('wp', v('wp')), ('bavg', pct(int(v('h')), ab) if ab > 0 else '.000'),
             ('ab', v('ab')), ('kl', v('kl')), ('cg', v('cg')), ('double', v('doubles')),
-            ('ip', f"{ip:.1f}"), ('h', v('h')), ('ibb', v('ibb')), ('k', v('so')),
+            ('ip', _fmt_ip(ip)), ('h', v('h')), ('ibb', v('ibb')), ('k', v('so')),
             ('gs', v('gs')), ('er', v('er')), ('sha', v('sha')), ('sfa', v('sfa')),
             ('cbo', '0'), ('appear', v('appear')), ('r', v('r')),
             ('triple', v('triples')), ('hbp', v('hbp')), ('cia', '0'), ('sho', v('sho')),
@@ -1448,7 +1789,7 @@ def _add_pchseason(parent, agg):
 # ── Main builder ──────────────────────────────────────────────────────────────
 
 def build_bsgame_xml(game):
-    """Return a UTF-8 XML string in PrestoSports bsgame format for the given game."""
+    """Return a UTF-8 XML string in Gameday Stats bsgame format for the given game."""
     from datetime import date as date_cls
     d = date_cls.today()
     generated = f"{d.month:02d}/{d.day}/{d.year}"
@@ -1458,7 +1799,7 @@ def build_bsgame_xml(game):
     is_initial = play_count == 0
 
     root = ET.Element('bsgame')
-    root.set('source',    'PrestoSports')
+    root.set('source',    'Gameday Stats')
     root.set('version',   '7.13.1')
     root.set('generated', generated)
 
@@ -1485,7 +1826,12 @@ def build_bsgame_xml(game):
     if _start and re.match(r'^0\d:', _start):
         _start = re.sub(r'^0(\d):', r'\1:', _start)
     venue.set('start', _start)
-    venue.set('schedinn', str(game.scheduled_innings or 9))
+    _sched = game.scheduled_innings
+    if not _sched:
+        rules = game.season.rules if game.season else ""
+        sport_id = game.season.sport_id if game.season else 1
+        _sched = 7 if (sport_id == 11 or rules == "rules_hs_ba") else 9
+    venue.set('schedinn', str(_sched))
     venue.set('weather',  game.weather or '')
 
     umps = ET.SubElement(venue, 'umpires')
@@ -1840,7 +2186,7 @@ def build_bsgame_xml(game):
                     # Unassisted out: single digit 1-9, F/P/L+digit (F8, P3, L6, FF9 foul fly to rf), XUA (3UA, 6UA...), or FO/LO/PU
                     is_unassisted_code = (action_base and
                         ((len(action_base) == 1 and action_base.isdigit() and 1 <= int(action_base) <= 9)
-                         or (len(action_base) >= 2 and action_base[0].upper() in ('F', 'P', 'L')
+                         or (len(action_base) >= 2 and action_base[0].upper() in ('F', 'P', 'L', 'I')
                              and action_base[-1].isdigit() and 1 <= int(action_base[-1]) <= 9)
                          or (len(action_base) == 3 and action_base[0].isdigit() and 1 <= int(action_base[0]) <= 9 and action_base[1:].upper() == 'UA')
                          or action_base in ('FO', 'LO', 'PU')))
@@ -1851,8 +2197,19 @@ def build_bsgame_xml(game):
                     is_fc  = (action_base == 'FC')                                         # fielder's choice batter reaches
                     is_sb  = (not action_raw) and ('stole' in narr_lower)                  # stolen base runner play
                     is_cs  = (not action_raw) and ('caught stealing' in narr_lower)        # caught stealing runner play
+                    is_balk = ('BK' in (action_raw or '').upper() or 'BALK' in (action_raw or '').upper() or
+                               ((not action_raw) and 'balk' in narr_lower))
+                    is_rundown = (not action_raw and not is_sb and not is_cs and not is_pickoff and not is_balk
+                                  and (play.runner_first or play.runner_second or play.runner_third)
+                                  and (play.outs_on_play or 0) >= 1
+                                  and 'out at' in narr_lower and ' to ' in narr_lower)
+                    is_pickoff = ('PO' in (action_raw or '').upper() or (action_base or '').upper() == 'PO' or
+                                  ((not action_raw) and 'picked off' in narr_lower and
+                                   (play.runner_first or play.runner_second or play.runner_third or play.batter_name)))
                     is_dp_tp = bool(('DP' in action_raw or 'TP' in action_raw or 'GDP' in action_raw)
-                                    and action_base and re.match(r'\d{2,3}', action_base))
+                                    and any(re.search(r'\d{2,3}', p) for p in action_parts))
+                    _is_lineout_dp = is_dp_tp and action_base and action_base[0].upper() == 'L'
+                    fc_is_dp = is_fc and (play.outs_on_play or 0) >= 2
                     is_strikeout = action_base in ('K', 'KS', 'KL') or action_raw in ('KS', 'KL')
                     is_k_cs_dp = is_strikeout and 'DP' in (action_raw or '') and 'caught stealing' in narr_lower
                     batter_out = 1 if (action_base in _OUT_ACTIONS or is_throw_out or is_unassisted_code or is_dp_tp or is_strikeout) else 0
@@ -1865,9 +2222,12 @@ def build_bsgame_xml(game):
                     is_admin_play = bool(action_base and (str(action_base).startswith('R:') or str(action_base).startswith('B:')))
                     adv_map    = {'1B': 1, '2B': 2, '3B': 3, 'HR': 4, 'BB': 1, 'IBB': 1, 'HBP': 1, 'HP': 1, 'FC': 1, 'CI': 1}
                     batter_reached = is_error or action_has_wp or action_has_pb or action_has_error or is_ci
-                    adv        = 0 if (batter_out or is_df) else (1 if batter_reached else adv_map.get(action_base, adv_map.get(action_raw, 0)))
+                    _base_adv  = adv_map.get(action_base, adv_map.get(action_raw, 0))
+                    adv        = 0 if (batter_out or is_df) else (
+                                     min(_base_adv + (1 if (action_has_wp or action_has_pb) and _base_adv > 0 else 0), 4)
+                                     if _base_adv > 0 else (1 if batter_reached else 0))
                     # SAC/SF/DF/CI/R:/B: are not at-bats; walks and HBP are not at-bats
-                    is_ab      = not is_df and not is_sac and not is_sf and not is_ci and not is_admin_play and (batter_out or action_raw not in ('BB', 'IBB', 'HBP', 'HP', 'CI'))
+                    is_ab      = not is_df and not is_sac and not is_sf and not is_ci and not is_admin_play and (batter_out or action_base not in ('BB', 'IBB', 'HBP', 'HP', 'CI'))
                     is_hit     = action_base in ('1B', '2B', '3B', 'HR') and not batter_out
 
                     # Runner-only "advanced on error": no batter involvement — no <batter> element
@@ -1877,11 +2237,107 @@ def build_bsgame_xml(game):
                         (play.runner_first or play.runner_second or play.runner_third) and
                         not batter_out and adv == 0
                     )
+                    # Runner-only "scored on error": runs_scored, runner on 2nd/3rd, no batter action — use play data only
+                    is_runner_only_scored_on_error = (
+                        (not action_raw or not action_raw.strip()) and
+                        (play.runs_scored or 0) > 0 and
+                        (play.runner_second or play.runner_third) and
+                        not batter_out and adv == 0
+                    )
 
-                    # ── SB / CS: runner-only play — no <batter> element ─────────────
-                    if is_sb or is_cs:
+                    # ── Balk: runner-only play — no <batter> element ─────────────────────────
+                    if is_balk:
                         for run_base, run_name in ((1, play.runner_first), (2, play.runner_second), (3, play.runner_third)):
                             if not run_name:
+                                continue
+                            run_el = ET.SubElement(play_elem, 'runner')
+                            next_b = min(run_base + 1, 4)
+                            run_el.set('base', str(run_base))
+                            run_el.set('name', _fullname(run_name))
+                            run_el.set('action', 'BK')
+                            run_el.set('out', '0')
+                            run_el.set('adv', '1')
+                            run_el.set('tobase', str(next_b))
+                            if next_b == 4:
+                                run_el.set('scored', '1')
+                                run_el.set('por', _fullname(pch_name) or '')
+                        pit_el = ET.SubElement(play_elem, 'pitcher')
+                        pit_el.set('name', _fullname(pch_name) or '')
+                        pit_el.set('bk', '1')
+                        if play.narrative:
+                            narr_el = ET.SubElement(play_elem, 'narrative')
+                            narr_el.set('text', _normalize_narrative(_narrative_full_names(play.narrative)))
+                        continue
+
+                    # ── Rundown: runner caught between bases — no <batter> element ───────────
+                    if is_rundown:
+                        _VALID_RD_POS = frozenset({'p','c','1b','2b','3b','ss','lf','cf','rf'})
+                        _NUM_RD = {'p':'1','c':'2','1b':'3','2b':'4','3b':'5','ss':'6','lf':'7','cf':'8','rf':'9'}
+                        # Parse throw sequence from narrative: "Name out at base p to ss to 3b to c"
+                        # Resolve %b:N placeholders (e.g. %b:2 → "third") before matching
+                        _narr_rd = _resolve_narrative_placeholders(narr_lower)
+                        _seq_match = re.search(r'out\s+at\s+\S+\s+(.+)$', _narr_rd)
+                        _throw_seq = []
+                        if _seq_match:
+                            for _part in re.split(r'\s+to\s+', _seq_match.group(1)):
+                                _p = _part.strip().rstrip('.')
+                                _pn = _POS_ALIAS.get(_p, _p)
+                                if _pn in _VALID_RD_POS:
+                                    _throw_seq.append(_pn)
+                        _action_code = ''.join(_NUM_RD.get(p, '') for p in _throw_seq)
+                        # Determine which runner is out (first runner whose base is empty in runners_after)
+                        _ra = (play.runners_after or '000')[:3].ljust(3, '0')
+                        for _rb, _rn in ((1, play.runner_first), (2, play.runner_second), (3, play.runner_third)):
+                            if not _rn:
+                                continue
+                            run_el = ET.SubElement(play_elem, 'runner')
+                            run_el.set('base', str(_rb))
+                            run_el.set('name', _fullname(_rn))
+                            run_el.set('action', _action_code)
+                            run_el.set('out', '1')
+                            run_el.set('adv', '0')
+                            run_el.set('tobase', str(_rb))
+                            break
+                        _outs_rd = play.outs_on_play or 1
+                        pit_el = ET.SubElement(play_elem, 'pitcher')
+                        pit_el.set('name', _fullname(pch_name) or '')
+                        pit_el.set('bf', '1')
+                        pit_el.set('ip', str(_outs_rd))
+                        pit_el.set('ab', '1')
+                        # Fielder elements: unique positions from throw sequence, sorted by pos number
+                        if _throw_seq:
+                            _def_team_rd = home if vh == 'V' else vis
+                            _last_pos = _throw_seq[-1]
+                            _seen = []
+                            _seen_set = set()
+                            for _fp in _throw_seq:
+                                if _fp not in _seen_set:
+                                    _seen.append(_fp)
+                                    _seen_set.add(_fp)
+                            _POS_NUM_ORD = {'p':1,'c':2,'1b':3,'2b':4,'3b':5,'ss':6,'lf':7,'cf':8,'rf':9}
+                            _stat_src = list(getattr(game, 'fielding_stats', []) or []) + list(game.batting_stats or [])
+                            for _fp in sorted(_seen, key=lambda x: _POS_NUM_ORD.get(x, 99)):
+                                _fbs = next((s for s in _stat_src if s.team_id == _def_team_rd.id
+                                             and (s.position or '').lower().startswith(_fp)), None)
+                                fld_el = ET.SubElement(play_elem, 'fielder')
+                                fld_el.set('pos', _fp)
+                                fld_el.set('name', (_fbs.player.name if _fbs and _fbs.player else '') or '')
+                                fld_el.set('po', '1' if _fp == _last_pos else '0')
+                                if _fp != _last_pos:
+                                    fld_el.set('a', '1')
+                        if play.narrative:
+                            narr_el = ET.SubElement(play_elem, 'narrative')
+                            narr_el.set('text', _normalize_narrative(_narrative_full_names(play.narrative)))
+                        continue
+
+                    # ── SB / CS / Pickoff: runner-only play — no <batter> element ─────────────
+                    if is_sb or is_cs or is_pickoff:
+                        ra = (play.runners_after or '000')[:3].ljust(3, '0')
+                        for run_base, run_name in ((1, play.runner_first), (2, play.runner_second), (3, play.runner_third)):
+                            if not run_name:
+                                continue
+                            # Pickoff: emit only the runner who was picked off (on base before, empty after)
+                            if is_pickoff and run_base <= len(ra) and ra[run_base - 1] == '1':
                                 continue
                             run_el = ET.SubElement(play_elem, 'runner')
                             if is_sb:
@@ -1900,7 +2356,7 @@ def build_bsgame_xml(game):
                                              ('action', sb_action), ('out', '0'), ('adv', sb_adv),
                                              ('tobase', str(next_b)), ('sb', '1')]:
                                     run_el.set(k, v)
-                            else:
+                            elif is_cs:
                                 cs_throw = ''
                                 tm = re.search(r'\b(\w+)\s+to\s+(\w+)\b', narr_lower)
                                 if tm:
@@ -1912,7 +2368,40 @@ def build_bsgame_xml(game):
                                              ('action', f'{cs_throw}CS'), ('out', '1'), ('adv', '0'),
                                              ('tobase', str(run_base)), ('cs', '1')]:
                                     run_el.set(k, v)
+                            else:
+                                # Pickoff: throw from action_type (13 PO, 1-3 PO) or default 13
+                                po_throw = ''
+                                for part in (action_parts or []):
+                                    if len(part) == 2 and part.isdigit():
+                                        po_throw = part + ' '
+                                        break
+                                    if len(part) == 3 and part[1] in '-–' and part[0].isdigit() and part[2].isdigit():
+                                        po_throw = part[0] + part[2] + ' '
+                                        break
+                                if not po_throw:
+                                    po_throw = '13 '  # default p to 1b
+                                for k, v in [('base', str(run_base)), ('name', _fullname(run_name)),
+                                             ('action', f'{po_throw}PO'), ('out', '1'), ('adv', '0'),
+                                             ('tobase', str(run_base)), ('pickoff', '1')]:
+                                    run_el.set(k, v)
                             break
+                        # Fallback: some pickoffs store the runner in batter_name, not runner_* fields
+                        if is_pickoff and not any([play.runner_first, play.runner_second, play.runner_third]):
+                            run_el = ET.SubElement(play_elem, 'runner')
+                            po_throw = ''
+                            for part in (action_parts or []):
+                                if len(part) == 2 and part.isdigit():
+                                    po_throw = part + ' '
+                                    break
+                                if len(part) == 3 and part[1] in '-–' and part[0].isdigit() and part[2].isdigit():
+                                    po_throw = part[0] + part[2] + ' '
+                                    break
+                            if not po_throw:
+                                po_throw = '13 '  # default p→1b
+                            for k, v in [('base', '1'), ('name', _fullname(play.batter_name or '')),
+                                         ('action', f'{po_throw}PO'), ('out', '1'), ('adv', '0'),
+                                         ('tobase', '1'), ('pickoff', '1')]:
+                                run_el.set(k, v)
                         pit_el = ET.SubElement(play_elem, 'pitcher')
                         pit_el.set('name', _fullname(pch_name) or '')
                         if is_sb:
@@ -1929,6 +2418,37 @@ def build_bsgame_xml(game):
                                 fld_el.set('sba', '1')
                                 if fpos == 'c' and sb_err_by_c:
                                     fld_el.set('e', '1')
+                        elif is_pickoff:
+                            pit_el.set('bf', '1')
+                            pit_el.set('ip', '1')
+                            pit_el.set('ab', '1')
+                            pit_el.set('pickoff', '1')
+                            def_team_po = home if vh == 'V' else vis
+                            po_throw = '13'
+                            for part in (action_parts or []):
+                                if len(part) == 2 and part.isdigit():
+                                    po_throw = part
+                                    break
+                                if len(part) == 3 and part[1] in '-–' and part[0].isdigit() and part[2].isdigit():
+                                    po_throw = part[0] + part[2]
+                                    break
+                            _NUM_TO_POS_PO = {1:'p',2:'c',3:'1b',4:'2b',5:'3b',6:'ss',7:'lf',8:'cf',9:'rf'}
+                            assist_pos = _NUM_TO_POS_PO.get(int(po_throw[0]), 'p') if po_throw and po_throw[0].isdigit() else 'p'
+                            putout_pos = _NUM_TO_POS_PO.get(int(po_throw[1]), '1b') if po_throw and len(po_throw) >= 2 and po_throw[1].isdigit() else '1b'
+                            _stat_sources = list(getattr(game, 'fielding_stats', []) or []) + list(game.batting_stats or [])
+                            for fpos in (assist_pos, putout_pos):
+                                if assist_pos == putout_pos and fpos == putout_pos:
+                                    continue
+                                fld_el = ET.SubElement(play_elem, 'fielder')
+                                _fbs = next((s for s in _stat_sources if s.team_id == def_team_po.id
+                                             and (s.position or '').lower().startswith(fpos)), None)
+                                fld_el.set('pos', fpos)
+                                fld_el.set('name', (_fbs.player.name if _fbs and _fbs.player else '') or (_fullname(pch_name) if fpos == 'p' else ''))
+                                if fpos == assist_pos:
+                                    fld_el.set('po', '0')
+                                    fld_el.set('a', '1')
+                                else:
+                                    fld_el.set('po', '1')
                         else:
                             pit_el.set('bf', '1')
                             pit_el.set('ip', '1')
@@ -1972,6 +2492,36 @@ def build_bsgame_xml(game):
                         narr_el.set('text', _resolve_narrative_placeholders(_narrative_full_names(play.narrative or '')))
                         continue  # skip standard batter/pitcher/fielder/narrative block
 
+                    # ── Runner-only "scored on error" — no batter, pitcher name only, runner with scored/ue ──
+                    if is_runner_only_scored_on_error:
+                        err_code = ''
+                        if _err_pos_match:
+                            err_code = f'E{_err_pos_match.group(1)}'
+                        run_adv = '2' if play.runner_second else '1'
+                        run_base = 2 if play.runner_second else 3
+                        run_name = (play.runner_second or play.runner_third)
+                        run_action = f'++{err_code}' if err_code else '++'
+                        is_ue = (play.runs_scored or 0) > (play.earned_runs or 0)
+                        if is_ue:
+                            run_action += ' UE'
+                        run_el = ET.SubElement(play_elem, 'runner')
+                        for k, v in [('base', str(run_base)), ('name', _fullname(run_name)),
+                                     ('action', run_action), ('out', '0'), ('adv', run_adv),
+                                     ('tobase', '4'), ('scored', '1')]:
+                            run_el.set(k, v)
+                        if is_ue:
+                            run_el.set('ue', '1')
+                        pit_el = ET.SubElement(play_elem, 'pitcher')
+                        pit_el.set('name', _fullname(pch_name) or '')
+                        if play.runs_scored and (play.earned_runs or 0) < (play.runs_scored or 0):
+                            pit_el2 = ET.SubElement(play_elem, 'pitcher')
+                            pit_el2.set('name', '')
+                            pit_el2.set('r', str(play.runs_scored or 0))
+                        if play.narrative:
+                            narr_el = ET.SubElement(play_elem, 'narrative')
+                            narr_el.set('text', _resolve_narrative_placeholders(_narrative_full_names(play.narrative or '')))
+                        continue  # skip standard batter/pitcher/fielder/narrative block
+
                     # Skip batter when unneeded (runner-only advance on error, or no meaningful batter stats)
                     # Dropped foul (E9 DF): batter stays at plate — Presto shows batter with action
                     # R:/B: admin plays (runner placed, batter set): show batter with action, no ab
@@ -1990,10 +2540,15 @@ def build_bsgame_xml(game):
                             bat_attrs.append(('por', _fullname(pch_name) or ''))
                         if is_ab:
                             bat_attrs.append(('ab', '1'))
-                        if action_raw in ('BB', 'IBB'):
+                        if action_base in ('BB', 'IBB'):
                             bat_attrs.append(('bb', '1'))
-                        if action_raw == 'IBB':
+                        if action_base == 'IBB':
                             bat_attrs.append(('ibb', '1'))
+                        if ('GDP' in action_raw or fc_is_dp) and not _is_lineout_dp:
+                            bat_attrs.append(('gdp', '1'))
+                            bat_attrs.append(('dp', '1'))
+                        elif 'DP' in action_raw and not _is_lineout_dp and not is_sf:
+                            bat_attrs.append(('dp', '1'))
                         if action_raw in ('HBP', 'HP'):
                             bat_attrs.append(('hbp', '1'))
                         if is_hit:
@@ -2008,19 +2563,19 @@ def build_bsgame_xml(game):
                             bat_attrs.append(('so', '1'))
                         if action_raw == 'KL' or action_base == 'KL':
                             bat_attrs.append(('kl', '1'))
-                        if batter_out and (action_base == 'GO' or is_throw_out or is_dp_tp or (is_unassisted_out and 'ground' in narr_lower)):
+                        if batter_out and (action_base == 'GO' or is_throw_out or (is_dp_tp and not _is_lineout_dp) or (is_unassisted_out and 'ground' in narr_lower)):
                             bat_attrs.append(('gndout', '1'))
                         if is_sac:
                             bat_attrs.append(('sh', '1'))
                             bat_attrs.append(('gndout', '1'))
                         if is_sf:
-                            bat_attrs.append(('sf', '1'))
                             bat_attrs.append(('ab', '1'))
-                            bat_attrs.append(('flyout', '1'))
-                        is_flyout = (batter_out and action_base and action_base[0].upper() in ('F', 'P')
+                        is_flyout = (batter_out and action_base and action_base[0].upper() in ('F', 'P', 'L', 'I')
                                      and len(action_base) >= 2 and action_base[-1].isdigit())
                         if is_flyout:
                             bat_attrs.append(('flyout', '1'))
+                        if is_sf:
+                            bat_attrs.append(('sf', '1'))
                         if is_fc:
                             bat_attrs.append(('rchfc', '1'))
                             bat_attrs.append(('gndout', '1'))
@@ -2042,10 +2597,12 @@ def build_bsgame_xml(game):
                         a = [('base', str(base)), ('name', name), ('action', action), ('out', out), ('adv', adv), ('tobase', str(tobase))]
                         if scored:
                             a.append(('scored', '1'))
+                            a.append(('por', _fullname(pch_name) or ''))
+                            a.append(('por', _fullname(pch_name) or ''))
                         if ue:
                             a.append(('ue', '1'))
                         return a
-                    if adv >= 1 and action_raw in ('BB', 'IBB', 'HBP', 'HP'):
+                    if adv >= 1 and action_base in ('BB', 'IBB', 'HBP', 'HP'):
                         if play.runner_first:
                             run_el = ET.SubElement(play_elem, 'runner')
                             for k, v in _runner_attrs(1, _fullname(play.runner_first), '+', '0', '1', '2'):
@@ -2122,19 +2679,35 @@ def build_bsgame_xml(game):
                                 p_pos = _POS_ALIAS.get(tm.group(2), tm.group(2))
                                 if a_pos in _POS_NUM and p_pos in _POS_NUM:
                                     fc_throw = f'{_POS_NUM[a_pos]}{_POS_NUM[p_pos]}'
+                        fc_suffix = ' GDP' if fc_is_dp else ''
                         run_el = ET.SubElement(play_elem, 'runner')
-                        for k, v in _runner_attrs(1, _fullname(play.runner_first), fc_throw, '1', '0', '1'):
+                        for k, v in _runner_attrs(1, _fullname(play.runner_first), fc_throw + fc_suffix, '1', '0', '1'):
                             run_el.set(k, v)
+                        # Second runner also out in a DP (e.g. forced at 3rd "out on the play")
+                        if fc_is_dp and play.runner_second:
+                            run2_el = ET.SubElement(play_elem, 'runner')
+                            for k, v in [('base', '2'), ('name', _fullname(play.runner_second)),
+                                         ('action', 'X'), ('out', '1'), ('adv', '0'), ('tobase', '2')]:
+                                run2_el.set(k, v)
                     elif is_sf:
-                        # SF: runner from 3rd scores and/or runner from 2nd advances to third
-                        if play.runner_third and (play.runs_scored or 'scored' in narr_lower or 'scoring' in narr_lower):
-                            run_el = ET.SubElement(play_elem, 'runner')
-                            for k, v in _runner_attrs(3, _fullname(play.runner_third), '+', '0', '1', '4', scored=True):
-                                run_el.set(k, v)
-                        if play.runner_second and ('advanced' in narr_lower or 'to third' in narr_lower or (play.runners_after or '000')[2:3] == '1'):
-                            run_el = ET.SubElement(play_elem, 'runner')
-                            for k, v in _runner_attrs(2, _fullname(play.runner_second), '+', '0', '1', '3'):
-                                run_el.set(k, v)
+                        _sf_is_dp = 'DP' in action_raw
+                        if _sf_is_dp:
+                            # SF DP: runner at 3rd tagged and scored (not shown); runner at 2nd doubled off
+                            if play.runner_second:
+                                run_el = ET.SubElement(play_elem, 'runner')
+                                for k, v in [('base', '2'), ('name', _fullname(play.runner_second)),
+                                             ('action', 'X'), ('out', '1'), ('adv', '0'), ('tobase', '2')]:
+                                    run_el.set(k, v)
+                        else:
+                            # SF: runner from 3rd scores and/or runner from 2nd advances to third
+                            if play.runner_third and (play.runs_scored or 'scored' in narr_lower or 'scoring' in narr_lower):
+                                run_el = ET.SubElement(play_elem, 'runner')
+                                for k, v in _runner_attrs(3, _fullname(play.runner_third), '+', '0', '1', '4', scored=True):
+                                    run_el.set(k, v)
+                            if play.runner_second and ('advanced' in narr_lower or 'to third' in narr_lower or (play.runners_after or '000')[2:3] == '1'):
+                                run_el = ET.SubElement(play_elem, 'runner')
+                                for k, v in _runner_attrs(2, _fullname(play.runner_second), '+', '0', '1', '3'):
+                                    run_el.set(k, v)
                     elif is_sac and play.runner_first:
                         # SAC: runners advance — only emit when they actually advance (Presto omits non-advancers)
                         run_el = ET.SubElement(play_elem, 'runner')
@@ -2264,12 +2837,19 @@ def build_bsgame_xml(game):
                         if not is_df:
                             pit_attrs.append(('bf', '1'))
                         if batter_out or (is_fc and (play.outs_on_play or 0) >= 1) or is_hit:
-                            ip_val = str(play.outs_on_play or 1) if is_dp_tp and (play.outs_on_play or 0) > 1 else '1'
-                            pit_attrs.append(('ip', ip_val))
+                            # Calculate IP (outs) for the play
+                            default_ip = 3 if 'TP' in action_raw else (2 if is_dp_tp else 1)
+                            ip_val = str(play.outs_on_play) if (play.outs_on_play or 0) > 1 else str(default_ip)
+                            if ip_val != '0':
+                                pit_attrs.append(('ip', ip_val))
                         if is_ab:
                             pit_attrs.append(('ab', '1'))
-                    if action_raw in ('BB', 'IBB'):
+                    if action_base in ('BB', 'IBB'):
                         pit_attrs.append(('bb', '1'))
+                    if action_base == 'IBB':
+                        pit_attrs.append(('ibb', '1'))
+                    if 'GDP' in action_raw or fc_is_dp:
+                        pit_attrs.append(('gdp', '1'))
                     if action_raw in ('HBP', 'HP'):
                         pit_attrs.append(('hbp', '1'))
                     if is_ci:
@@ -2293,16 +2873,16 @@ def build_bsgame_xml(game):
                         pit_attrs.append(('kl', '1'))
                     if action_has_wp:
                         pit_attrs.append(('wp', '1'))
-                    if (batter_out or (is_fc and (play.outs_on_play or 0) >= 1)) and (action_base == 'GO' or is_throw_out or is_sac or is_dp_tp or is_fc or (is_unassisted_out and 'ground' in narr_lower)):
+                    if (batter_out or (is_fc and (play.outs_on_play or 0) >= 1)) and (action_base == 'GO' or is_throw_out or is_sac or (is_dp_tp and not _is_lineout_dp) or is_fc or (is_unassisted_out and 'ground' in narr_lower)):
                         pit_attrs.append(('gndout', '1'))
                     if is_sac:
                         pit_attrs.append(('sha', '1'))
                     if is_sf:
-                        pit_attrs.append(('sfa', '1'))
                         pit_attrs.append(('ab', '1'))
-                        pit_attrs.append(('flyout', '1'))
                     if is_flyout:
                         pit_attrs.append(('flyout', '1'))
+                    if is_sf:
+                        pit_attrs.append(('sfa', '1'))
                     for k, v in pit_attrs:
                         pit_el.set(k, v)
 
@@ -2367,13 +2947,35 @@ def build_bsgame_xml(game):
                                 fld_el.set('po', '1')
                                 fld_el.set('indp', '1')
                     elif is_strikeout and batter_out:
-                        cat_bs = next((s for s in game.batting_stats if s.team_id == def_team.id
-                                       and (s.position or '').lower().startswith('c')), None)
-                        if cat_bs and cat_bs.player:
-                            fld_el = ET.SubElement(play_elem, 'fielder')
-                            fld_el.set('pos', 'c')
-                            fld_el.set('name', cat_bs.player.name or '')
-                            fld_el.set('po', '1')
+                        # Check for throw code after K (e.g. "K 23" = dropped 3rd strike, out at 1b)
+                        _k_throw = next((p for p in action_parts[1:] if len(p) == 2 and p.isdigit()), None)
+                        _NUM_TO_POS_K = {1:'p', 2:'c', 3:'1b', 4:'2b', 5:'3b', 6:'ss', 7:'lf', 8:'cf', 9:'rf'}
+                        _stat_src_k = list(getattr(game, 'fielding_stats', []) or []) + list(game.batting_stats or [])
+                        if _k_throw:
+                            # Dropped third strike thrown out: thrower gets po="0" a="1", receiver gets po="1"
+                            a_pos = _NUM_TO_POS_K.get(int(_k_throw[0]), '')
+                            p_pos = _NUM_TO_POS_K.get(int(_k_throw[1]), '')
+                            for _kpos, _kattrs in [(a_pos, {'po': '0', 'a': '1'}), (p_pos, {'po': '1'})]:
+                                if not _kpos:
+                                    continue
+                                fld_el = ET.SubElement(play_elem, 'fielder')
+                                fld_el.set('pos', _kpos)
+                                _km = next((s for s in _stat_src_k if s.team_id == def_team.id
+                                            and (s.position or '').lower().startswith(_kpos)
+                                            and getattr(s, 'player', None)), None)
+                                fld_el.set('name', _km.player.name if _km and _km.player else '')
+                                for _ka, _kv in _kattrs.items():
+                                    fld_el.set(_ka, _kv)
+                        else:
+                            # Regular strikeout: catcher gets po="1"
+                            cat_bs = next((s for s in _stat_src_k if s.team_id == def_team.id
+                                           and (s.position or '').lower().startswith('c')
+                                           and getattr(s, 'player', None)), None)
+                            if cat_bs and cat_bs.player:
+                                fld_el = ET.SubElement(play_elem, 'fielder')
+                                fld_el.set('pos', 'c')
+                                fld_el.set('name', cat_bs.player.name or '')
+                                fld_el.set('po', '1')
                     elif is_strikeout and (action_has_wp or action_has_pb):
                         # K WP / K PB: catcher involved, no putout; K PB gets pb="1"
                         cat_bs = next((s for s in game.batting_stats if s.team_id == def_team.id
@@ -2491,7 +3093,7 @@ def build_bsgame_xml(game):
                             err_pos_raw = (err_m.group(1) or err_m.group(2) or '').lower()
                             err_pos = _POS_ALIAS_ERR.get(err_pos_raw, err_pos_raw)
                             _VALID_POS = {'p','c','1b','2b','3b','ss','lf','cf','rf'}
-                            for pos_norm, attr, val in [(ast_pos, 'a', '1'), (err_pos, 'e', '1')]:
+                            for pos_norm, attr, val in [(err_pos, 'e', '1'), (ast_pos, 'a', '1')]:
                                 if pos_norm and pos_norm in _VALID_POS:
                                     for stat in list(getattr(game, 'fielding_stats', []) or []) + list(game.batting_stats or []):
                                         if stat.team_id != def_team.id or not getattr(stat, 'player', None):
@@ -2562,10 +3164,11 @@ def build_bsgame_xml(game):
                                 fld_el.set('pos', pos_norm)
                                 fld_el.set('name', '')
                                 fld_el.set('e', '1')
-                    elif ('DP' in action_raw or 'TP' in action_raw or 'GDP' in action_raw) and re.match(r'\d{2,3}', action_base or ''):
-                        # Double play / triple play: derive fielders from numeric code (e.g. 643, 543)
+                    elif ('DP' in action_raw or 'TP' in action_raw or 'GDP' in action_raw) and any(re.search(r'\d{2,3}', p) for p in action_parts):
+                        # Double play / triple play: derive fielders from numeric code (e.g. 643, L63 DP)
                         # Standard position numbers: 1=P, 2=C, 3=1B, 4=2B, 5=3B, 6=SS, 7=LF, 8=CF, 9=RF
-                        seq_m = re.match(r'(\d{2,3})', action_base or '')
+                        _dp_seq_part = next((p for p in action_parts if re.search(r'\d{2,3}', p)), None)
+                        seq_m = re.search(r'(\d{2,3})', _dp_seq_part or '')
                         if seq_m:
                             seq = seq_m.group(1)
                             _NUM_TO_POS = {1:'p', 2:'c', 3:'1b', 4:'2b', 5:'3b', 6:'ss', 7:'lf', 8:'cf', 9:'rf'}
@@ -2603,7 +3206,7 @@ def build_bsgame_xml(game):
                             pos_digit = None
                             if len(action_base) == 1 and action_base.isdigit() and 1 <= int(action_base) <= 9:
                                 pos_digit = int(action_base)
-                            elif len(action_base) >= 2 and action_base[0].upper() in ('F', 'P', 'L') and action_base[-1].isdigit():
+                            elif len(action_base) >= 2 and action_base[0].upper() in ('F', 'P', 'L', 'I') and action_base[-1].isdigit():
                                 d = int(action_base[-1])
                                 if 1 <= d <= 9:
                                     pos_digit = d
@@ -2702,7 +3305,10 @@ def build_bsgame_xml(game):
 
                             fld_attrs = {}  # pnorm -> {bs or None, po, a}
                             # Presto order: assist first, then putout
-                            for pos, attrs in [(pos_a, {'po': '0', 'a': '1'}), (pos_b, {'po': '1'})]:
+                            # For FC DP: assist fielder also gets a putout (forced second runner at their base)
+                            _sf_dp_fld = is_sf and 'DP' in action_raw
+                            _fld_is_dp = fc_is_dp or is_dp_tp or _sf_dp_fld
+                            for pos, attrs in [(pos_a, {'po': '1' if fc_is_dp else '0', 'a': '1'}), (pos_b, {'po': '1'})]:
                                 pnorm = (_POS_ALIAS.get(pos, pos) if pos else None)
                                 if not pnorm or pnorm not in _VALID_FLD_POS:
                                     continue
@@ -2711,6 +3317,9 @@ def build_bsgame_xml(game):
                                     fld_attrs[pnorm] = {'bs': bs, 'po': 0, 'a': 0}
                                 fld_attrs[pnorm]['po'] += int(attrs.get('po', 0))
                                 fld_attrs[pnorm]['a'] += int(attrs.get('a', 0))
+                            # SF DP: catching fielder gets an extra putout (doubled off runner)
+                            if _sf_dp_fld and pos_b and (_POS_ALIAS.get(pos_b, pos_b) in fld_attrs):
+                                fld_attrs[_POS_ALIAS.get(pos_b, pos_b)]['po'] += 1
                             _POS_NUM_ORD = {'p': 1, 'c': 2, '1b': 3, '2b': 4, '3b': 5, 'ss': 6, 'lf': 7, 'cf': 8, 'rf': 9}
                             for pnorm, data in sorted(fld_attrs.items(), key=lambda x: _POS_NUM_ORD.get(x[0], 99)):
                                 if pnorm not in _VALID_FLD_POS:
@@ -2722,6 +3331,8 @@ def build_bsgame_xml(game):
                                 fld_el.set('pos', pnorm)
                                 fld_el.set('name', (bs.player.name if bs and bs.player else '') or '')
                                 fld_el.set('po', str(po))
+                                if _fld_is_dp:
+                                    fld_el.set('indp', '1')
                                 if a:
                                     fld_el.set('a', str(a))
 
@@ -2772,16 +3383,17 @@ def build_bsgame_xml(game):
         last = max(all_plays, key=lambda p: (p.inning, 0 if p.half == 'top' else 1, p.sequence))
         cur_outs = (last.outs_before or 0) + (last.outs_on_play or 0)
         inn_done = cur_outs >= 3
-        blob_live = _live_status_from_blob(game)
-        # Status count should reflect the CURRENT at-bat only.
-        # If the last saved play is in-progress, use it. Otherwise, look for a live
-        # in-progress at-bat in the blob for the current/next half. If none exists,
-        # the count is 0-0 with 0 pitches.
-        if blob_live:
-            b_str, s_str, np_val = str(blob_live['b']), str(blob_live['s']), blob_live['np']
+        gwt_line = _gwt_status_line_dict(game)
+        blob_live = bool(gwt_line)
+
+        # Prefer synced GWT blob for the whole status line when present (eventInfo + raw plays).
+        if gwt_line:
+            b_str, s_str, np_val = str(gwt_line['b']), str(gwt_line['s']), gwt_line['np']
+            vh = gwt_line['vh']
+            bat_id = vis_id if vh == 'V' else home_id
+            status_inning = gwt_line['inning']
+            status_outs = gwt_line['outs']
         elif inn_done:
-            # Half just ended — check blob for pitches already thrown to first batter of next half.
-            # Pass the expected next inning/half so stale blob data from old at-bats is ignored.
             b_str, s_str, np_val = '0', '0', 0
             if (last.half or '').lower() == 'bottom':
                 _next_inn, _next_half_ord = last.inning + 1, 0
@@ -2791,41 +3403,31 @@ def build_bsgame_xml(game):
             if live:
                 b_int, s_int, np_val = live
                 b_str, s_str = str(b_int), str(s_int)
+            if (last.half or '').lower() == 'bottom':
+                vh, bat_id = 'V', vis_id
+                status_inning = last.inning + 1
+            else:
+                vh, bat_id = 'H', home_id
+                status_inning = last.inning
+            status_outs = 0
         elif last.pitch_sequence and not (last.action_type or '').strip():
             if last.balls is not None and last.strikes is not None:
                 b_int, s_int = last.balls, last.strikes
             else:
                 b_int, s_int = _balls_strikes_from_pitch_sequence(last.pitch_sequence)
             b_str, s_str = str(b_int), str(s_int)
-            np_val = _pitch_count_from_sequence(last.pitch_sequence)  # total pitches in at-bat
+            np_val = _pitch_count_from_sequence(last.pitch_sequence)
+            vh = 'V' if (last.half or '').lower() == 'top' else 'H'
+            bat_id = vis_id if vh == 'V' else home_id
+            status_inning = last.inning
+            status_outs = cur_outs
         else:
             b_str, s_str, np_val = '0', '0', 0
-            # Last play completed: only use blob if a NEW in-progress at-bat exists
-            # in the same half. Never reuse the finished batter's terminal count.
             _cur_half_ord = 0 if (last.half or '').lower() == 'top' else 1
             live = _live_count_from_blob(game, expected_inn=last.inning, expected_half_ord=_cur_half_ord)
             if live:
                 b_int, s_int, np_val = live
                 b_str, s_str = str(b_int), str(s_int)
-        # When blob live status exists, prefer the scorer's current synced inning/half.
-        # Otherwise infer from the last saved play.
-        inn_done = cur_outs >= 3
-        if blob_live:
-            vh = blob_live['vh']
-            bat_id = vis_id if vh == 'V' else home_id
-            status_inning = blob_live['inning']
-            status_outs = blob_live['outs']
-        elif inn_done:
-            if (last.half or '').lower() == 'bottom':
-                # Bottom ended -> top of next inning, visitor bats first
-                vh, bat_id = 'V', vis_id
-                status_inning = last.inning + 1
-            else:
-                # Top ended -> bottom of same inning, home bats
-                vh, bat_id = 'H', home_id
-                status_inning = last.inning
-            status_outs = 0
-        else:
             vh = 'V' if (last.half or '').lower() == 'top' else 'H'
             bat_id = vis_id if vh == 'V' else home_id
             status_inning = last.inning
@@ -2876,6 +3478,33 @@ def build_bsgame_xml(game):
                     continue
                 if 'DF' in (p.action_type or '').upper():
                     continue  # Dropped foul — same batter stays up
+                if (p.action_type or '').upper().startswith('B:'):
+                    try:
+                        cur_spot = int((p.action_type or '').split(':')[1])
+                    except (ValueError, IndexError):
+                        pass
+                    continue
+                # Runner-only plays — batter stays up, do not advance cur_spot
+                _ar = (p.action_type or '').upper().strip()
+                _narr = (p.narrative or '').lower()
+                _ap = re.split(r'\s+', _ar)
+                _ab = _ap[-1] if _ap else ''
+                _is_runner_only = (
+                    # Pickoff
+                    ('PO' in _ar or _ab == 'PO' or (not _ar and 'picked off' in _narr))
+                    # Balk
+                    or ('BK' in _ar or 'BALK' in _ar or (not _ar and 'balk' in _narr))
+                    # Stolen base
+                    or (not _ar and 'stole' in _narr)
+                    # Caught stealing
+                    or (not _ar and 'caught stealing' in _narr)
+                    # Rundown / runner out on bases
+                    or (not _ar and 'out at' in _narr and ' to ' in _narr
+                        and (p.runner_first or p.runner_second or p.runner_third)
+                        and (p.outs_on_play or 0) >= 1)
+                )
+                if _is_runner_only:
+                    continue
                 # Real PA: advance to next batter
                 bn = (p.batter_name or '').strip()
                 if bn and bn in name_to_spot:
@@ -2896,14 +3525,52 @@ def build_bsgame_xml(game):
             status_batter = cur_vis_batter if vh == 'V' else cur_home_batter
             if not status_batter:
                 status_batter = last.batter_name or ''
-        # Runners on base: empty when inning ended (3 outs), else from runners_after
-        ra = (last.runners_after or '000').ljust(3, '0') if status_outs < 3 else '000'
-        adv_map = {'1B': 1, '2B': 2, '3B': 3, 'HR': 4, 'BB': 1, 'IBB': 1, 'HBP': 1, 'HP': 1, 'FC': 1}
-        last_adv = 0 if (last.outs_on_play and last.outs_on_play > 0) or (last.action_type or '').upper() in _OUT_ACTIONS else adv_map.get((last.action_type or '').upper(), 0)
-        # Batter on 1st when they reached (adv>=1); else runner_first was on 1st before
-        st_first = (_fullname(last.batter_name) if last_adv >= 1 else _fullname(last.runner_first)) if ra[0] == '1' else ''
-        st_second = _fullname(last.runner_first) if ra[1] == '1' else ''
-        st_third = _fullname(last.runner_second) if ra[2] == '1' else ''
+        if (last.action_type or '').upper().startswith('B:') and last.narrative:
+            m = re.search(r'(?i)batter\s+set\s+to\s+([A-Za-z][A-Za-z\s\'-]+?)(?:\s*\(|\.|$)', last.narrative)
+            if m:
+                extracted = m.group(1).strip()
+                status_batter = _fullname(extracted) or extracted
+
+        if gwt_line and gwt_line.get('batter'):
+            status_batter = gwt_line['batter']
+
+        st_first, st_second, st_third = '', '', ''
+        if status_outs < 3:
+            ra = (last.runners_after or '000').ljust(3, '0')
+            st_first = _fullname(last.runner_first) if ra[0] == '1' else ''
+            st_second = _fullname(last.runner_second) if ra[1] == '1' else ''
+            st_third = _fullname(last.runner_third) if ra[2] == '1' else ''
+            if plays_elem is not None:
+                all_play_els = plays_elem.findall('.//play')
+                if all_play_els:
+                    last_el = all_play_els[-1]
+                    b1, b2, b3 = last_el.get('first', ''), last_el.get('second', ''), last_el.get('third', '')
+                    moved_to = {}
+                    out_names = set()
+                    bat_el = last_el.find('batter')
+                    if bat_el is not None:
+                        if bat_el.get('out') == '1': out_names.add(bat_el.get('name', ''))
+                        elif bat_el.get('tobase') in ('1','2','3'): moved_to[bat_el.get('tobase')] = bat_el.get('name', '')
+                    for run_el in last_el.findall('runner'):
+                        if run_el.get('out') == '1': out_names.add(run_el.get('name', ''))
+                        elif run_el.get('tobase') in ('1','2','3'): moved_to[run_el.get('tobase')] = run_el.get('name', '')
+                    
+                    def _res_base(b_val, b_num, cur_val, ra_flag):
+                        if b_num in moved_to: return moved_to[b_num]
+                        if b_val and b_val not in out_names and b_val not in moved_to.values(): return b_val
+                        return cur_val if ra_flag == '1' else ''
+                        
+                    st_first = _res_base(b1, '1', st_first, ra[0])
+                    st_second = _res_base(b2, '2', st_second, ra[1])
+                    st_third = _res_base(b3, '3', st_third, ra[2])
+
+        if gwt_line:
+            if gwt_line.get('first'):
+                st_first = _fullname(gwt_line['first']) or gwt_line['first']
+            if gwt_line.get('second'):
+                st_second = _fullname(gwt_line['second']) or gwt_line['second']
+            if gwt_line.get('third'):
+                st_third = _fullname(gwt_line['third']) or gwt_line['third']
 
         status = ET.SubElement(root, 'status')
         status.set('complete', 'N')
@@ -2932,7 +3599,9 @@ def build_bsgame_xml(game):
                     return full or short
             return ''
         status_pitcher = ''
-        if not inn_done:
+        if gwt_line and gwt_line.get('pitcher'):
+            status_pitcher = gwt_line['pitcher']
+        if not status_pitcher and status_outs < 3:
             status_pitcher = _pitcher_on_status_def_team(last.pitcher_name)
         if not status_pitcher:
             needed_half = 'top' if vh == 'V' else 'bottom'
@@ -2957,23 +3626,31 @@ def build_bsgame_xml(game):
         status.set('s', s_str)
         status.set('np', str(np_val))
     elif (play_count == 0 or not all_plays) and game.has_lineup and vis and home:
-        # Starters entered, no plays in DB (or empty) — status for top 1st
-        # Check blob for in-progress pitch (e.g. Ball clicked before any completed AB)
-        live = _live_count_from_blob(game)
-        if live:
-            b_int, s_int, np_val = live
-            b_str, s_str = str(b_int), str(s_int)
-            np_str = str(np_val)
+        # Starters entered, no plays in DB (or empty). Prefer GWT blob for status line when synced.
+        gwt_pre = _gwt_status_line_dict(game)
+        if gwt_pre:
+            b_str, s_str = str(gwt_pre['b']), str(gwt_pre['s'])
+            np_str = str(gwt_pre['np'])
+            inn_s, vh_s = str(gwt_pre['inning']), gwt_pre['vh']
+            outs_s = str(gwt_pre['outs'])
+            bat_id_s = vis_id if vh_s == 'V' else home_id
         else:
-            b_str, s_str, np_str = '0', '0', '0'
+            live = _live_count_from_blob(game)
+            if live:
+                b_int, s_int, np_val = live
+                b_str, s_str = str(b_int), str(s_int)
+                np_str = str(np_val)
+            else:
+                b_str, s_str, np_str = '0', '0', '0'
+            inn_s, vh_s, outs_s, bat_id_s = '1', 'V', '0', vis_id
 
         status = ET.SubElement(root, 'status')
         status.set('complete', 'N')
-        status.set('inning', '1')
+        status.set('inning', inn_s)
         status.set('endinn', 'N')
-        status.set('vh', 'V')
-        status.set('batting', vis_id)
-        status.set('outs', '0')
+        status.set('vh', vh_s)
+        status.set('batting', bat_id_s)
+        status.set('outs', outs_s)
         # Home starting pitcher (pitcher with gs>0, or lineup player at position p)
         home_ps = next((s for s in game.pitching_stats if s.team_id == home.id and (s.gs or 0) > 0), None)
         if not home_ps:
@@ -2981,14 +3658,26 @@ def build_bsgame_xml(game):
             pitcher_name = home_sp.player.name if (home_sp and home_sp.player) else ''
         else:
             pitcher_name = home_ps.player.name if home_ps.player else ''
+        if gwt_pre and gwt_pre.get('pitcher'):
+            pitcher_name = gwt_pre['pitcher']
         status.set('pitcher', pitcher_name)
-        # Visitor leadoff batter (batting_order=1)
+        # Visitor leadoff batter (batting_order=1) unless GWT names current batter
         vis_bs = next((s for s in game.batting_stats if s.team_id == vis.id and s.batting_order == 1 and s.is_starter), None)
         batter_name = vis_bs.player.name if (vis_bs and vis_bs.player) else ''
+        if gwt_pre and gwt_pre.get('batter'):
+            batter_name = gwt_pre['batter']
         status.set('batter', batter_name)
-        status.set('first', '')
-        status.set('second', '')
-        status.set('third', '')
+        f1, f2, f3 = '', '', ''
+        if gwt_pre:
+            if gwt_pre.get('first'):
+                f1 = _fullname(gwt_pre['first']) or gwt_pre['first']
+            if gwt_pre.get('second'):
+                f2 = _fullname(gwt_pre['second']) or gwt_pre['second']
+            if gwt_pre.get('third'):
+                f3 = _fullname(gwt_pre['third']) or gwt_pre['third']
+        status.set('first', f1)
+        status.set('second', f2)
+        status.set('third', f3)
         status.set('vup', '1')
         status.set('hup', '1')
         status.set('b', b_str)
@@ -2997,8 +3686,9 @@ def build_bsgame_xml(game):
 
     _indent(root)
     xml_bytes = ET.tostring(root, encoding='unicode', xml_declaration=False)
-    # Presto format: use paired tags <tag></tag> instead of self-closing <tag/>
-    xml_bytes = re.sub(r'<(umpires|lineinn|note|rules)([^>]*)\s*/>', r'<\1\2></\1>', xml_bytes)
+    # Convert all self-closing tags to paired tags (Gameday Stats requirement)
+    # This also removes any trailing space captured before the closing />
+    xml_bytes = re.sub(r'<([a-zA-Z0-9_]+)([^>]*?)\s*/>', r'<\1\2></\1>', xml_bytes)
     return '<?xml version="1.0" encoding="UTF-8"?>\n\n' + xml_bytes
 
 
@@ -3021,3 +3711,59 @@ def game_boxscore_xml(event_id):
         'Expires':             '0',
     }
     return Response(xml_str, mimetype='application/xml', headers=headers)
+
+
+# ── Livestats testing (temporary) ─────────────────────────────────────────────
+
+def write_livestats_xml(game):
+    """Write this game's XML to livestats_xml folder. Called automatically on save."""
+    if not game or not getattr(game, 'has_lineup', False):
+        return
+    try:
+        os.makedirs(LIVESTATS_XML_DIR, exist_ok=True)
+        xml_str = build_bsgame_xml(game)
+        path = os.path.join(LIVESTATS_XML_DIR, f'game_{game.id}.xml')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(xml_str)
+    except Exception:
+        pass
+
+
+@xml_bp.route('/livestats/export')
+def livestats_export():
+    """Write XML for all games with lineups to instance/livestats_xml/ for team website testing."""
+    from app.models import User
+    if not session.get('user_id') or not User.query.get(session['user_id']):
+        return Response('Login required', status=401)
+    os.makedirs(LIVESTATS_XML_DIR, exist_ok=True)
+    games = Game.query.filter(
+        (Game.has_lineup == True) | Game.plays.any() | Game.innings.any()
+    ).distinct().all() if hasattr(Game, 'plays') else Game.query.filter(Game.has_lineup == True).all()
+    count = 0
+    for g in games:
+        try:
+            xml_str = build_bsgame_xml(g)
+            path = os.path.join(LIVESTATS_XML_DIR, f'game_{g.id}.xml')
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(xml_str)
+            count += 1
+        except Exception:
+            pass
+    return Response(f'Exported {count} game(s) to {LIVESTATS_XML_DIR}', mimetype='text/plain')
+
+
+@xml_bp.route('/livestats/game/<int:game_id>.xml')
+def livestats_game_xml(game_id):
+    """Serve XML from livestats folder. Point team website at this URL for testing."""
+    path = os.path.join(LIVESTATS_XML_DIR, f'game_{game_id}.xml')
+    if not os.path.isfile(path):
+        game = Game.query.get_or_404(game_id)
+        xml_str = build_bsgame_xml(game)
+        return Response(xml_str, mimetype='application/xml', headers={
+            'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Expires': '0',
+        })
+    resp = send_from_directory(LIVESTATS_XML_DIR, f'game_{game_id}.xml', mimetype='application/xml')
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp

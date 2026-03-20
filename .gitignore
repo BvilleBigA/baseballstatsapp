@@ -5,6 +5,9 @@ dist/
 build/
 *.egg
 instance/
+# livestats_xml/ contents ignored, but folder exists via .gitkeep
+livestats_xml/*
+!livestats_xml/.gitkeep
 uploads/
 *.db
 .env

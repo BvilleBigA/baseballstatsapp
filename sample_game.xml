@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bsgame source="PrestoSports" version="7.13.0" generated="02/11/2026">
+<bsgame source="Gameday Stats" version="7.13.0" generated="02/11/2026">
   <venue visid="STATS2" homeid="STATS1" visname="Stats2" homename="Stats1" date="4/17/2025" location="Test Location" stadium="" duration="2:00" delay="" attend="0" leaguegame="Y" start="3:00 PM" schedinn="7" weather="">
     <umpires></umpires>
     <notes>

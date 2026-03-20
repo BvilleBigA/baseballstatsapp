@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<bsgame source="PrestoSports" version="7.13.1" generated="03/11/2026"> 
-  <venue visid="STATS1" homeid="STATS2" visname="Stats1" homename="Stats2" date="3/17/2026" location="hello" stadium="" duration="" delay="" attend="0" leaguegame="N" start="6:30 PM" schedinn="9" weather=""> 
+<bsgame source="Gameday Stats" version="7.13.1" generated="03/13/2026"> 
+  <venue visid="STATS1" homeid="STATS2" visname="Stats1" homename="Stats2" date="3/17/2026" location="hello" stadium="" duration="1:00" delay="" attend="0" leaguegame="N" start="6:30 PM" schedinn="9" weather=""> 
     <umpires></umpires>  
     <notes> 
       <note text=""></note> 
@@ -9,12 +9,14 @@
     <rules batters="9,9" usedh="Y"></rules> 
   </venue>  
   <team vh="V" code="DemoStats1" id="STATS1" name="Stats1" record=""> 
-    <linescore line="0,0,0,0,0" runs="0" hits="5" errs="9" lob="2"> 
+    <linescore line="0,0,0,0,1,0,0" runs="1" hits="7" errs="9" lob="2"> 
       <lineinn inn="1" score="0"></lineinn>  
       <lineinn inn="2" score="0"></lineinn>  
       <lineinn inn="3" score="0"></lineinn>  
       <lineinn inn="4" score="0"></lineinn>  
-      <lineinn inn="5" score="0"></lineinn> 
+      <lineinn inn="5" score="1"></lineinn>  
+      <lineinn inn="6" score="0"></lineinn>  
+      <lineinn inn="7" score="0"></lineinn> 
     </linescore>  
     <starters> 
       <starter spot="1" name="Chloe Middlebrooks" uni="1" pos="p"></starter>  
@@ -41,18 +43,18 @@
       <batord spot="10" name="Nolan Gorman" uni="16" pos="dh"></batord> 
     </batords>  
     <totals> 
-      <hitting ab="14" r="0" h="5" rbi="0" double="0" triple="0" hr="0" bb="1" sb="2" cs="2" hbp="1" sh="0" sf="0" so="3" gdp="1" ibb="0" picked="0" ground="2" fly="2" kl="1" hitdp="2" hittp="1"></hitting>  
-      <fielding po="12" a="7" e="9" pb="1" ci="1" indp="1"></fielding>  
-      <hsitsummary fly="2" ground="2" lob="2" rcherr="1" vsleft="0,0" advops="3,7" leadoff="3,5" pinchhit="0,1" w2outs="1,3" wloaded="0,0" wrbiops="1,4" wrunners="2,6" rbi3rd="0,1"></hsitsummary>  
-      <pitching ip="4.0" ab="20" bb="2" bf="26" bk="0" double="1" er="6" fly="4" ground="5" h="7" hbp="0" hr="1" ibb="1" kl="0" r="8" so="3" triple="1" wp="1" picked="0" sha="1" sfa="2" gdp="0" pitches="31" strikes="17"></pitching>  
-      <psitsummary fly="4" ground="5" leadoff="2,2" wrunners="5,14" vsleft="0,0" w2outs="0,4" pitches="31" strikes="17"></psitsummary> 
+      <hitting ab="21" r="1" h="7" rbi="0" double="0" triple="0" hr="0" bb="1" sb="2" cs="2" hbp="1" sh="0" sf="0" so="5" gdp="1" ibb="0" picked="1" ground="3" fly="4" kl="2" hitdp="3" hittp="1"></hitting>  
+      <fielding po="18" a="14" e="9" pb="1" ci="1" indp="3"></fielding>  
+      <hsitsummary fly="4" ground="3" lob="2" rcherr="1" vsleft="0,0" advops="3,8" leadoff="4,7" pinchhit="0,1" w2outs="2,6" wloaded="0,0" wrbiops="1,4" wrunners="2,7" rbi3rd="0,1"></hsitsummary>  
+      <pitching ip="6.0" ab="25" bb="3" bf="33" bk="1" double="2" er="6" fly="6" ground="6" h="10" hbp="0" hr="1" ibb="1" kl="0" r="8" so="3" triple="1" wp="2" picked="0" sha="1" sfa="3" gdp="1" pitches="34" strikes="18"></pitching>  
+      <psitsummary fly="6" ground="6" leadoff="3,4" wrunners="7,17" vsleft="0,0" w2outs="0,4" pitches="34" strikes="18"></psitsummary> 
     </totals>  
     <player name="Chloe Middlebrooks" shortname="Chloe Middlebrooks" revname="Middlebrooks, Chloe" uni="1" gp="1" gs="1" spot="1" code="1" bats="R" throws="R" pos="p/rf" playerId="bl6w7p3hc8hepycq" atpos="rf"> 
       <hitting r="0" h="0" ab="2" rbi="0" so="1" gdp="1" ground="1" kl="1" hitdp="1" slg=".000" obp=".000" ops=".000"></hitting>  
       <fielding po="2" a="0" e="2"></fielding>  
       <hsitsummary ground="1" advops="0,1" leadoff="0,1" wrunners="0,1"></hsitsummary>  
       <hitseason bb="1" ab="24" kl="4" hittp="0" obpct=".269" double="1" h="6" ibb="0" rchci="0" hr="0" sb="0" slugpct=".292" cs="2" r="1" gdp="0" sf="1" triple="0" hitdp="0" sh="0" picked="0" hbp="0" rbi="2" so="9" bavg=".250"></hitseason>  
-      <pitching appear="1" ip="1.0" gs="1" ab="7" bb="1" bf="8" double="1" er="3" fly="1" ground="2" h="2" hr="1" r="3" so="0" pitches="15" strikes="8" whip="3.00"></pitching>  
+      <pitching appear="1" ip="1.0" gs="1" ab="7" bb="1" bf="8" double="1" er="3" fly="1" ground="2" h="2" hr="1" r="3" so="0" pitches="15" strikes="8" whip="3.00" loss="0-1"></pitching>  
       <pchseason bb="2" bf="40" bk="0" hr="0" era="0.00" wp="1" bavg=".132" ab="38" kl="2" cg="1" double="2" ip="11.0" h="5" ibb="0" k="15" gs="2" er="0" sha="0" sfa="0" cbo="0" appear="2" r="0" triple="0" hbp="0" cia="0" sho="1"></pchseason>  
       <psitsummary fly="1" ground="2" picked="0" leadoff="1,1" wrunners="2,4" w2outs="0,3" pitches="15" strikes="8"></psitsummary>  
       <hsituation context="leadoff" ab="1" kl="1" r="0" h="0" rbi="0" so="1" out="1"></hsituation>  
@@ -74,129 +76,135 @@
     </player>  
     <player name="Kiki Edwards" shortname="Kiki Edwards" revname="Edwards, Kiki" uni="2" gp="1" gs="1" spot="2" code="2" bats="R" throws="R" pos="c/cf" playerId="uyx81uvgeazrnif5" atpos="cf"> 
       <hitting r="0" h="1" ab="1" rbi="0" bb="1" sb="1" cs="1" slg="1.000" obp="1.000" ops="2.000"></hitting>  
-      <fielding po="0" a="0" e="0"></fielding>  
+      <fielding po="3" a="0" e="0" indp="1"></fielding>  
       <hsitsummary w2outs="1,1"></hsitsummary>  
       <hitseason bb="2" ab="23" kl="2" hittp="0" obpct=".269" double="0" h="4" ibb="0" rchci="0" hr="0" sb="0" slugpct=".261" cs="0" r="5" gdp="0" sf="0" triple="1" hitdp="0" sh="0" picked="0" hbp="1" rbi="1" so="9" bavg=".174"></hitseason>  
       <hsituation context="vsright" bb="1" cs="1" ab="1" r="0" h="1" rbi="0" out="1" sb="1"></hsituation>  
       <hsituation pos="cf" context="bypos" bb="1" cs="1" ab="1" r="0" h="1" rbi="0" out="1" sb="1"></hsituation>  
       <hsituation spot="2" context="byspot" bb="1" cs="1" ab="1" r="0" h="1" rbi="0" out="1" sb="1"></hsituation>  
       <hsituation pitcher="Will Castro" context="vspitcher" bb="1" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation context="empty" bb="1" ab="1" r="0" h="1" rbi="0" out="0"></hsituation> 
+      <hsituation context="empty" bb="1" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
+      <fsituation pos="cf" context="bypos" indp="1" a="0" e="0" po="3"></fsituation> 
     </player>  
     <player name="Dylan Carlson" shortname="Dylan Carlson" revname="Carlson, Dylan" uni="3" gp="1" gs="1" spot="3" code="3" bats="R" throws="R" pos="1b/lf" playerId="io40enrekzmh0rob" atpos="lf"> 
-      <hitting r="0" h="1" ab="1" rbi="0" hbp="1" slg="1.000" obp="1.000" ops="2.000"></hitting>  
+      <hitting r="0" h="2" ab="2" rbi="0" hbp="1" picked="1" slg="1.000" obp="1.000" ops="2.000"></hitting>  
       <fielding po="1" a="1" e="0"></fielding>  
-      <hsitsummary advops="1,1" leadoff="1,1"></hsitsummary>  
+      <hsitsummary advops="1,1" leadoff="1,1" w2outs="1,1"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
       <hsituation context="leadoff" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation context="vsright" ab="1" r="0" hbp="1" h="1" rbi="0" out="2"></hsituation>  
+      <hsituation context="vsright" ab="2" r="0" pickoff="1" hbp="1" h="2" rbi="0" out="3"></hsituation>  
       <hsituation context="runners" ab="0" r="0" hbp="1" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation spot="3" context="byspot" ab="1" r="0" hbp="1" h="1" rbi="0" out="2"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="1" r="0" hbp="1" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation pos="lf" context="bypos" ab="1" r="0" hbp="1" h="1" rbi="0" out="2"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
+      <hsituation spot="3" context="byspot" ab="2" r="0" pickoff="1" hbp="1" h="2" rbi="0" out="3"></hsituation>  
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" r="0" hbp="1" h="2" rbi="0" out="0"></hsituation>  
+      <hsituation pos="lf" context="bypos" ab="2" r="0" pickoff="1" hbp="1" h="2" rbi="0" out="3"></hsituation>  
+      <hsituation context="empty" ab="2" r="0" h="2" rbi="0" out="0"></hsituation>  
       <fsituation pos="1b" context="bypos" a="0" e="0" po="1"></fsituation>  
       <fsituation pos="lf" context="bypos" a="1" e="0" po="0"></fsituation> 
     </player>  
     <player name="Maia Mumpfield" shortname="Maia Mumpfield" revname="Mumpfield, Maia" uni="4" gp="1" gs="1" spot="4" code="4" bats="R" throws="R" pos="2b/ss" playerId="4o0dwx1l9orcfh80" atpos="ss"> 
-      <hitting r="0" h="2" ab="2" rbi="0" slg="1.000" obp="1.000" ops="2.000"></hitting>  
-      <fielding po="3" a="0" e="0"></fielding>  
-      <hsitsummary advops="2,2" wrbiops="1,1" wrunners="2,2"></hsitsummary>  
+      <hitting r="0" h="3" ab="3" rbi="0" slg="1.000" obp="1.000" ops="2.000"></hitting>  
+      <fielding po="3" a="1" e="0"></fielding>  
+      <hsitsummary advops="2,2" leadoff="1,1" wrbiops="1,1" wrunners="2,2"></hsitsummary>  
       <hitseason bb="3" ab="25" kl="2" hittp="0" obpct=".367" double="1" h="8" ibb="1" rchci="0" hr="1" sb="3" slugpct=".480" cs="0" r="3" gdp="1" sf="2" triple="0" hitdp="1" sh="0" picked="0" hbp="0" rbi="6" so="10" bavg=".320"></hitseason>  
       <hsituation context="scorepos" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation context="vsright" ab="2" r="0" h="2" rbi="0" out="1"></hsituation>  
+      <hsituation context="leadoff" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
+      <hsituation context="vsright" ab="3" r="0" h="3" rbi="0" out="2"></hsituation>  
       <hsituation context="runners" ab="2" r="0" h="2" rbi="0" out="0"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" r="0" h="2" rbi="0" out="0"></hsituation>  
-      <hsituation pos="ss" context="bypos" ab="2" r="0" h="2" rbi="0" out="1"></hsituation>  
-      <hsituation spot="4" context="byspot" ab="2" r="0" h="2" rbi="0" out="1"></hsituation>  
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="3" r="0" h="3" rbi="0" out="0"></hsituation>  
+      <hsituation pos="ss" context="bypos" ab="3" r="0" h="3" rbi="0" out="2"></hsituation>  
+      <hsituation spot="4" context="byspot" ab="3" r="0" h="3" rbi="0" out="2"></hsituation>  
+      <hsituation context="empty" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
       <fsituation pos="2b" context="bypos" a="0" e="0" po="1"></fsituation>  
-      <fsituation pos="ss" context="bypos" a="0" e="0" po="2"></fsituation> 
+      <fsituation pos="ss" context="bypos" a="1" e="0" po="2"></fsituation> 
     </player>  
     <player name="s g" shortname="s g" revname="g, s" uni="45" gp="1" gs="1" spot="5" code="5" bats="R" throws="R" pos="3b" playerId="dd1plv7vjzdkp7bu" atpos="3b"> 
-      <hitting r="0" h="0" ab="2" rbi="0" so="1" ground="1" hittp="1" slg=".000" obp=".000" ops=".000"></hitting>  
-      <fielding po="0" a="1" e="4" indp="1"></fielding>  
-      <hsitsummary ground="1" lob="2" advops="0,2" w2outs="0,1" wrbiops="0,2" wrunners="0,2"></hsitsummary>  
+      <hitting r="0" h="0" ab="3" rbi="0" so="1" ground="1" fly="1" hitdp="1" hittp="1" slg=".000" obp=".000" ops=".000"></hitting>  
+      <fielding po="1" a="3" e="4" indp="2"></fielding>  
+      <hsitsummary fly="1" ground="1" lob="2" advops="0,3" w2outs="0,1" wrbiops="0,2" wrunners="0,3"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
       <hsituation context="scorepos" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="2"></hsituation>  
       <hsituation context="scorepos2" ab="1" r="0" h="0" rbi="0" so="1" out="1"></hsituation>  
-      <hsituation pos="3b" context="bypos" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="2"></hsituation>  
-      <hsituation context="vsright" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="2"></hsituation>  
-      <hsituation context="runners" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="2"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="2"></hsituation>  
+      <hsituation pos="3b" context="bypos" ab="3" r="0" fly="1" h="0" rbi="0" ground="1" so="1" out="3"></hsituation>  
+      <hsituation context="vsright" ab="3" r="0" fly="1" h="0" rbi="0" ground="1" so="1" out="3"></hsituation>  
+      <hsituation context="runners" ab="3" r="0" fly="1" h="0" rbi="0" ground="1" so="1" out="3"></hsituation>  
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="3" r="0" fly="1" h="0" rbi="0" ground="1" so="1" out="3"></hsituation>  
       <hsituation context="runners2" ab="1" r="0" h="0" rbi="0" so="1" out="1"></hsituation>  
-      <hsituation spot="5" context="byspot" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="2"></hsituation>  
-      <fsituation pos="3b" context="bypos" indp="1" a="1" e="4" po="0"></fsituation> 
+      <hsituation spot="5" context="byspot" ab="3" r="0" fly="1" h="0" rbi="0" ground="1" so="1" out="3"></hsituation>  
+      <fsituation pos="3b" context="bypos" indp="2" a="3" e="4" po="1"></fsituation> 
     </player>  
     <player name="Payton Oconnor" shortname="Payton Oconnor" revname="Oconnor, Payton" uni="6" gp="1" gs="1" spot="6" code="6" bats="R" throws="R" pos="ss/2b" playerId="91jpnjrdtya9dxm6" atpos="2b"> 
-      <hitting r="0" h="0" ab="2" rbi="0" sb="1" cs="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>  
-      <fielding po="2" a="2" e="1" indp="1"></fielding>  
-      <hsitsummary rcherr="1" fly="1" leadoff="1,2"></hsitsummary>  
+      <hitting r="0" h="0" ab="3" rbi="0" sb="1" cs="1" so="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>  
+      <fielding po="4" a="3" e="1" indp="2"></fielding>  
+      <hsitsummary rcherr="1" fly="1" leadoff="1,2" w2outs="0,1"></hsitsummary>  
       <hitseason bb="2" ab="15" kl="1" hittp="0" obpct=".353" double="1" h="4" ibb="1" rchci="0" hr="1" sb="0" slugpct=".533" cs="0" r="1" gdp="0" sf="0" triple="0" hitdp="0" sh="0" picked="0" hbp="0" rbi="6" so="6" bavg=".267"></hitseason>  
-      <hsituation spot="6" context="byspot" cs="1" ab="2" r="0" fly="1" rcherr="1" h="0" rbi="0" out="2" sb="1"></hsituation>  
+      <hsituation spot="6" context="byspot" cs="1" ab="3" r="0" fly="1" rcherr="1" h="0" rbi="0" so="1" out="3" sb="1"></hsituation>  
       <hsituation context="leadoff" ab="2" r="0" fly="1" rcherr="1" h="0" rbi="0" out="1"></hsituation>  
-      <hsituation pos="2b" context="bypos" cs="1" ab="2" r="0" fly="1" rcherr="1" h="0" rbi="0" out="2" sb="1"></hsituation>  
-      <hsituation context="vsright" cs="1" ab="2" r="0" fly="1" rcherr="1" h="0" rbi="0" out="2" sb="1"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" r="0" fly="1" rcherr="1" h="0" rbi="0" out="1"></hsituation>  
-      <hsituation context="empty" ab="2" r="0" fly="1" rcherr="1" h="0" rbi="0" out="1"></hsituation>  
-      <fsituation pos="2b" context="bypos" indp="1" a="2" e="1" po="2"></fsituation> 
+      <hsituation pos="2b" context="bypos" cs="1" ab="3" r="0" fly="1" rcherr="1" h="0" rbi="0" so="1" out="3" sb="1"></hsituation>  
+      <hsituation context="vsright" cs="1" ab="3" r="0" fly="1" rcherr="1" h="0" rbi="0" so="1" out="3" sb="1"></hsituation>  
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="3" r="0" fly="1" rcherr="1" h="0" rbi="0" so="1" out="2"></hsituation>  
+      <hsituation context="empty" ab="3" r="0" fly="1" rcherr="1" h="0" rbi="0" so="1" out="2"></hsituation>  
+      <fsituation pos="2b" context="bypos" indp="2" a="3" e="1" po="4"></fsituation> 
     </player>  
     <player name="Ashton Schroyer" shortname="Ashton Schroyer" revname="Schroyer, Ashton" uni="7" gp="1" gs="1" spot="7" code="7" bats="L" throws="R" pos="lf/1b" playerId="9uvuknd14s3psh4e" atpos="1b"> 
-      <hitting r="0" h="0" ab="2" rbi="0" so="1" fly="1" hitdp="1" slg=".000" obp=".000" ops=".000"></hitting>  
-      <fielding po="1" a="0" e="0" indp="1"></fielding>  
-      <hsitsummary fly="1" advops="0,1" pinchhit="0,1" wrbiops="0,1" wrunners="0,1" rbi3rd="0,1"></hsitsummary>  
+      <hitting r="1" h="0" ab="3" rbi="0" so="1" fly="2" hitdp="1" slg=".000" obp=".000" ops=".000"></hitting>  
+      <fielding po="1" a="1" e="0" indp="1"></fielding>  
+      <hsitsummary fly="2" advops="0,1" leadoff="0,1" pinchhit="0,1" wrbiops="0,1" wrunners="0,1" rbi3rd="0,1"></hsitsummary>  
       <hitseason bb="1" ab="3" kl="0" hittp="0" obpct=".250" double="0" h="0" ibb="1" rchci="0" hr="0" sb="0" slugpct=".000" cs="0" r="0" gdp="0" sf="0" triple="0" hitdp="0" sh="1" picked="0" hbp="0" rbi="0" so="0" bavg=".000"></hitseason>  
-      <hsituation spot="7" context="byspot" ab="2" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
+      <hsituation spot="7" context="byspot" ue="1" ab="3" r="1" fly="2" h="0" rbi="0" so="1" out="3"></hsituation>  
       <hsituation context="scorepos" ab="1" r="0" h="0" rbi="0" so="1" out="1"></hsituation>  
-      <hsituation pos="1b" context="bypos" ab="2" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
-      <hsituation context="vsright" ab="2" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
+      <hsituation context="leadoff" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
+      <hsituation pos="1b" context="bypos" ue="1" ab="3" r="1" fly="2" h="0" rbi="0" so="1" out="3"></hsituation>  
+      <hsituation context="vsright" ue="1" ab="3" r="1" fly="2" h="0" rbi="0" so="1" out="3"></hsituation>  
       <hsituation context="runners" ab="1" r="0" h="0" rbi="0" so="1" out="1"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
-      <fsituation pos="1b" context="bypos" indp="1" a="0" e="0" po="1"></fsituation> 
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="3" r="0" fly="2" h="0" rbi="0" so="1" out="3"></hsituation>  
+      <hsituation context="empty" ab="2" r="0" fly="2" h="0" rbi="0" out="2"></hsituation>  
+      <fsituation pos="1b" context="bypos" indp="1" a="1" e="0" po="1"></fsituation> 
     </player>  
     <player name="Bella Morton" shortname="Bella Morton" revname="Morton, Bella" uni="8" gp="1" gs="1" spot="8" code="8" bats="R" throws="R" pos="dh/c" playerId="u27rc3mhpjgz9wl7" atpos="c"> 
-      <hitting r="0" h="0" ab="1" rbi="0" slg=".000" obp=".000" ops=".000"></hitting>  
-      <fielding po="2" a="0" e="2" ci="1" pb="1"></fielding>  
+      <hitting r="0" h="0" ab="2" rbi="0" so="1" kl="1" slg=".000" obp=".000" ops=".000"></hitting>  
+      <fielding po="2" a="1" e="2" ci="1" pb="1"></fielding>  
       <hsitsummary w2outs="0,1"></hsitsummary>  
       <hitseason bb="1" ab="19" kl="2" hittp="0" obpct=".333" double="1" h="5" ibb="0" rchci="0" hr="1" sb="2" slugpct=".474" cs="0" r="3" gdp="1" sf="0" triple="0" hitdp="1" sh="0" picked="0" hbp="1" rbi="1" so="6" bavg=".263"></hitseason>  
-      <hsituation spot="8" context="byspot" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
+      <hsituation spot="8" context="byspot" ab="2" kl="1" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
       <hsituation context="scorepos" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
       <hsituation context="scorepos2" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation pos="c" context="bypos" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
-      <hsituation context="vsright" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
+      <hsituation pos="c" context="bypos" ab="2" kl="1" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
+      <hsituation context="vsright" ab="2" kl="1" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
       <hsituation context="runners" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" kl="1" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
       <hsituation context="runners2" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
-      <fsituation pos="c" context="bypos" a="0" pb="1" e="2" ci="1" po="2"></fsituation> 
+      <hsituation context="empty" ab="2" kl="1" r="0" fly="1" h="0" rbi="0" so="1" out="2"></hsituation>  
+      <fsituation pos="c" context="bypos" a="1" pb="1" e="2" ci="1" po="2"></fsituation> 
     </player>  
     <player name="Judd Wascom" shortname="Judd Wascom" revname="Wascom, Judd" uni="9" gp="1" gs="1" spot="9" code="9" bats="R" throws="R" pos="rf/p" playerId="1g5sbxk433jac3na" atpos="p"> 
-      <hitting r="0" h="1" ab="1" rbi="0" slg="1.000" obp="1.000" ops="2.000"></hitting>  
-      <fielding po="1" a="2" e="0"></fielding>  
-      <hsitsummary leadoff="1,1"></hsitsummary>  
+      <hitting r="0" h="1" ab="2" rbi="0" ground="1" slg=".500" obp=".500" ops="1.000"></hitting>  
+      <fielding po="1" a="3" e="0"></fielding>  
+      <hsitsummary ground="1" leadoff="1,1" w2outs="0,1"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
-      <pitching appear="2" ip="3.0" ab="13" bb="1" bf="18" er="3" fly="3" ground="3" h="5" ibb="1" r="5" sha="1" sfa="2" so="3" triple="1" wp="1" pitches="16" strikes="9" whip="2.00"></pitching>  
+      <pitching appear="2" ip="5.0" ab="18" bb="2" bf="25" bk="1" double="1" er="3" fly="5" ground="4" gdp="1" h="8" ibb="1" r="5" sha="1" sfa="3" so="3" triple="1" wp="2" pitches="19" strikes="10" whip="2.00"></pitching>  
       <pchseason gs="0" cg="0" sho="0" cbo="0" h="0" r="0" er="0" bb="0" k="0" so="0" double="0" triple="0" hr="0" ab="0" bf="0" wp="0" hbp="0" bk="0" sfa="0" sha="0" cia="0" kl="0" ibb="0" appear="0" bavg=".000" avg=".000"></pchseason>  
-      <psitsummary fly="3" ground="3" picked="0" leadoff="1,1" wrunners="3,10" w2outs="0,1" pitches="16" strikes="9"></psitsummary>  
-      <hsituation spot="9" context="byspot" ab="1" r="0" h="1" rbi="0" out="1"></hsituation>  
+      <psitsummary fly="5" ground="4" picked="0" leadoff="2,3" wrunners="5,13" w2outs="0,1" pitches="19" strikes="10"></psitsummary>  
+      <hsituation spot="9" context="byspot" ab="2" r="0" h="1" rbi="0" ground="1" out="2"></hsituation>  
       <hsituation context="leadoff" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation pos="p" context="bypos" ab="1" r="0" h="1" rbi="0" out="1"></hsituation>  
-      <hsituation context="vsright" ab="1" r="0" h="1" rbi="0" out="1"></hsituation>  
-      <hsituation pitcher="Will Castro" context="vspitcher" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <fsituation pos="p" context="bypos" a="2" e="0" po="0"></fsituation>  
+      <hsituation pos="p" context="bypos" ab="2" r="0" h="1" rbi="0" ground="1" out="2"></hsituation>  
+      <hsituation context="vsright" ab="2" r="0" h="1" rbi="0" ground="1" out="2"></hsituation>  
+      <hsituation pitcher="Will Castro" context="vspitcher" ab="2" r="0" h="1" rbi="0" ground="1" out="1"></hsituation>  
+      <hsituation context="empty" ab="2" r="0" h="1" rbi="0" ground="1" out="1"></hsituation>  
+      <fsituation pos="p" context="bypos" a="3" e="0" po="0"></fsituation>  
       <fsituation pos="rf" context="bypos" a="0" e="0" po="1"></fsituation>  
-      <psituation context="loaded" bb="0" ab="1" r="0" bf="1" triple="1" ip="0.0" h="1" so="0" er="0"></psituation>  
-      <psituation context="scorepos" bb="1" ab="10" bf="13" ip="2.2" h="2" ibb="1" er="0" r="0" fly="3" triple="1" ground="3" cia="1" so="1"></psituation>  
-      <psituation context="scorepos2" bb="0" ab="2" r="0" fly="1" bf="3" ip="0.2" h="0" cia="1" so="0" er="0"></psituation>  
-      <psituation context="leadoff" bb="0" ab="1" r="0" bf="1" ip="0.0" h="0" wp="1" so="1" er="0"></psituation>  
+      <psituation context="scorepos2" bb="0" ab="3" r="0" fly="1" bf="4" ip="1.0" h="0" cia="1" so="0" er="0"></psituation>  
+      <psituation inn="6" context="byinn" bb="1" ab="3" r="0" fly="2" bf="4" double="1" ip="1.0" h="1" wp="1" so="0" er="0"></psituation>  
+      <psituation inn="5" context="byinn" bb="0" ab="4" r="0" gdp="1" bf="4" ip="1.0" h="2" bk="1" ground="1" so="0" er="0"></psituation>  
       <psituation inn="2" context="byinn" bb="1" ab="6" bf="8" ip="1.0" h="1" ibb="1" er="3" r="4" fly="1" triple="1" wp="1" ground="2" so="3"></psituation>  
       <psituation inn="4" context="byinn" bb="0" ab="5" r="1" fly="2" bf="6" ip="1.0" h="1" cia="1" so="0" er="0"></psituation>  
-      <psituation context="vsright" bb="1" ab="15" bf="18" ip="3.0" h="5" ibb="1" er="0" r="0" fly="3" triple="1" wp="1" ground="3" cia="1" so="3"></psituation>  
+      <psituation context="vsright" bb="2" ab="22" bf="26" double="1" ip="5.0" h="8" ibb="1" bk="1" er="0" r="0" fly="5" gdp="1" triple="1" wp="2" ground="4" cia="1" so="3"></psituation>  
       <psituation inn="3" context="byinn" bb="0" ab="4" r="0" bf="4" ip="1.0" h="3" ground="1" so="0" er="0"></psituation>  
-      <psituation context="runners" bb="1" ab="12" bf="15" ip="3.0" h="3" ibb="1" er="0" r="0" fly="3" triple="1" ground="3" cia="1" so="2"></psituation>  
-      <psituation context="runners2" bb="0" ab="2" r="0" fly="1" bf="3" ip="0.2" h="0" cia="1" so="0" er="0"></psituation>  
-      <psituation context="empty" bb="0" ab="3" r="0" bf="3" ip="0.0" h="2" wp="1" so="1" er="0"></psituation> 
+      <psituation context="runners" bb="1" ab="17" bf="20" double="1" ip="4.2" h="5" ibb="1" bk="1" er="0" r="0" fly="4" gdp="1" triple="1" ground="4" cia="1" so="2"></psituation>  
+      <psituation context="empty" bb="1" ab="5" r="0" fly="1" bf="6" ip="0.1" h="3" wp="2" so="1" er="0"></psituation>  
+      <psituation context="loaded" bb="0" ab="1" r="0" bf="1" triple="1" ip="0.0" h="1" so="0" er="0"></psituation>  
+      <psituation context="scorepos" bb="1" ab="14" bf="17" double="1" ip="4.1" h="3" ibb="1" er="0" r="0" fly="4" gdp="1" triple="1" ground="4" cia="1" so="1"></psituation>  
+      <psituation context="leadoff" bb="0" ab="3" r="0" fly="1" bf="3" ip="0.1" h="1" wp="1" so="1" er="0"></psituation>  
+      <psituation context="runners2" bb="0" ab="3" r="0" fly="1" bf="4" ip="1.0" h="0" bk="1" cia="1" so="0" er="0"></psituation> 
     </player>  
     <player name="Nolan Gorman" shortname="Nolan Gorman" revname="Gorman, Nolan" uni="16" gp="1" gs="1" spot="10" code="10" bats="R" throws="R" pos="cf/dh" playerId="kz163ovojf35t8h9" atpos="dh"> 
       <hitting r="0" h="0" ab="0" rbi="0" slg=".000" obp=".000" ops=".000"></hitting>  
@@ -263,12 +271,14 @@
     <player name="Sonny Gray" shortname="Sonny Gray" revname="Gray, Sonny" uni="54" gp="0" pos="" spot="0" code="" bats="R" throws="R"></player> 
   </team>  
   <team vh="H" code="DemoStats2" id="STATS2" name="Stats2" record=""> 
-    <linescore line="3,4,0,1,0" runs="8" hits="7" errs="2" lob="7"> 
+    <linescore line="3,4,0,1,0,0,X" runs="8" hits="10" errs="3" lob="8"> 
       <lineinn inn="1" score="3"></lineinn>  
       <lineinn inn="2" score="4"></lineinn>  
       <lineinn inn="3" score="0"></lineinn>  
       <lineinn inn="4" score="1"></lineinn>  
-      <lineinn inn="5" score="0"></lineinn> 
+      <lineinn inn="5" score="0"></lineinn>  
+      <lineinn inn="6" score="0"></lineinn>  
+      <lineinn inn="7" score="X"></lineinn> 
     </linescore>  
     <starters> 
       <starter spot="1" name="Will Castro" uni="1" pos="p"></starter>  
@@ -293,88 +303,90 @@
       <batord spot="9" name="Miguel Amaya" uni="9" pos="rf"></batord> 
     </batords>  
     <totals> 
-      <hitting ab="20" r="8" h="7" rbi="6" double="1" triple="1" hr="1" bb="2" sb="0" cs="0" hbp="0" sh="1" sf="2" so="3" gdp="0" ibb="1" picked="0" ground="5" fly="4" kl="0" hitdp="1" hittp="0"></hitting>  
-      <fielding po="14" a="8" e="2" pb="0" ci="0" indp="2" intp="1" csb="1" sba="2"></fielding>  
-      <hsitsummary adv="3" fly="4" ground="5" lob="6" rcherr="4" rchfc="1" vsleft="0,0" advops="11,17" leadoff="2,2" pinchhit="0,1" w2outs="0,4" wloaded="1,1" wrbiops="3,10" wrunners="5,14" rbi3rd="2,6"></hsitsummary>  
-      <pitching ip="4.2" ab="14" bb="1" bf="16" bk="0" double="0" er="0" fly="3" ground="2" h="5" hbp="1" hr="0" ibb="0" kl="1" r="0" so="3" triple="0" wp="0" picked="0" sha="0" sfa="0" gdp="1" pitches="29" strikes="17" sho="1"></pitching>  
-      <psitsummary fly="3" ground="2" leadoff="3,5" wrunners="2,6" vsleft="0,2" w2outs="1,3" pitches="29" strikes="17"></psitsummary> 
+      <hitting ab="25" r="8" h="10" rbi="6" double="2" triple="1" hr="1" bb="3" sb="0" cs="0" hbp="0" sh="1" sf="3" so="3" gdp="1" ibb="1" picked="0" ground="6" fly="5" kl="0" hitdp="3" hittp="0"></hitting>  
+      <fielding po="21" a="12" e="3" pb="0" ci="0" indp="3" intp="1" csb="1" sba="2"></fielding>  
+      <hsitsummary adv="3" fly="5" ground="6" lob="6" rcherr="4" rchfc="2" vsleft="0,0" advops="13,20" leadoff="3,4" pinchhit="0,1" w2outs="0,4" wloaded="1,1" wrbiops="4,12" wrunners="7,17" rbi3rd="2,7"></hsitsummary>  
+      <pitching ip="7.0" ab="21" bb="1" bf="23" bk="0" double="0" er="0" fly="5" ground="3" h="7" hbp="1" hr="0" ibb="0" kl="2" r="1" so="5" triple="0" wp="0" picked="1" sha="0" sfa="0" gdp="1" pitches="41" strikes="26"></pitching>  
+      <psitsummary fly="5" ground="3" picked="1" leadoff="4,7" wrunners="2,7" vsleft="0,3" w2outs="2,6" pitches="41" strikes="26"></psitsummary> 
     </totals>  
     <player name="Will Castro" shortname="Will Castro" revname="Castro, Will" uni="1" gp="1" gs="1" spot="1" code="1" bats="R" throws="R" pos="p" playerId="nr05bdryqcgkhsbq" atpos="p"> 
-      <hitting r="2" h="1" ab="2" rbi="0" bb="1" so="1" slg=".500" obp=".667" ops="1.167"></hitting>  
-      <fielding po="0" a="0" e="0" csb="2" sba="2"></fielding>  
-      <hsitsummary advops="1,2" leadoff="1,1" wrbiops="1,1" wrunners="1,2"></hsitsummary>  
+      <hitting r="2" h="2" ab="3" rbi="0" bb="1" so="1" slg=".667" obp=".750" ops="1.417"></hitting>  
+      <fielding po="0" a="2" e="0" csb="2" sba="2"></fielding>  
+      <hsitsummary advops="2,3" leadoff="1,1" wrbiops="1,1" wrunners="2,3"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
-      <pitching appear="1" ip="4.2" cg="1" sho="1" gs="1" ab="14" bb="1" bf="16" er="0" fly="3" ground="2" gdp="1" h="5" hbp="1" kl="1" r="0" so="3" pitches="29" strikes="17" whip="1.43"></pitching>  
+      <pitching appear="1" ip="7.0" cg="1" gs="1" ab="21" bb="1" bf="23" er="0" fly="5" ground="3" gdp="1" h="7" hbp="1" kl="2" picked="1" r="1" so="5" pitches="41" strikes="26" whip="1.14" win="1-0" save="1"></pitching>  
       <pchseason gs="0" cg="0" sho="0" cbo="0" h="0" r="0" er="0" bb="0" k="0" so="0" double="0" triple="0" hr="0" ab="0" bf="0" wp="0" hbp="0" bk="0" sfa="0" sha="0" cia="0" kl="0" ibb="0" appear="0" bavg=".000" avg=".000"></pchseason>  
-      <psitsummary fly="3" ground="2" picked="0" leadoff="3,5" wrunners="2,6" vsleft="0,2" w2outs="1,3" pitches="29" strikes="17"></psitsummary>  
+      <psitsummary fly="5" ground="3" picked="1" leadoff="4,7" wrunners="2,7" vsleft="0,3" w2outs="2,6" pitches="41" strikes="26"></psitsummary>  
       <hsituation context="scorepos" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
       <hsituation context="leadoff" bb="1" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="2" r="0" h="1" rbi="0" so="1" out="0"></hsituation>  
-      <hsituation pos="p" context="bypos" bb="1" ab="2" r="2" h="1" rbi="0" so="1" out="1"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="3" r="0" h="2" rbi="0" so="1" out="0"></hsituation>  
+      <hsituation pos="p" context="bypos" bb="1" ab="3" r="2" h="2" rbi="0" so="1" out="2"></hsituation>  
       <hsituation pitcher="Chloe Middlebrooks" context="vspitcher" bb="1" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation spot="1" context="byspot" bb="1" ab="2" r="2" h="1" rbi="0" so="1" out="1"></hsituation>  
-      <hsituation context="vsright" bb="1" ab="2" r="2" h="1" rbi="0" so="1" out="1"></hsituation>  
-      <hsituation context="runners" ab="2" r="0" h="1" rbi="0" so="1" out="0"></hsituation>  
+      <hsituation spot="1" context="byspot" bb="1" ab="3" r="2" h="2" rbi="0" so="1" out="2"></hsituation>  
+      <hsituation context="vsright" bb="1" ab="3" r="2" h="2" rbi="0" so="1" out="2"></hsituation>  
+      <hsituation context="runners" ab="3" r="0" h="2" rbi="0" so="1" out="0"></hsituation>  
       <hsituation context="empty" bb="1" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
-      <fsituation pos="p" context="bypos" a="0" sba="2" csb="2" e="0" po="0"></fsituation>  
+      <fsituation pos="p" context="bypos" a="2" sba="2" csb="2" e="0" po="0"></fsituation>  
       <psituation context="scorepos2" bb="0" ab="2" r="0" csb="1" bf="2" ip="0.2" h="0" so="1" er="0"></psituation>  
-      <psituation inn="5" context="byinn" bb="0" ab="2" r="0" csb="1" bf="2" ip="0.2" h="0" so="1" er="0"></psituation>  
-      <psituation context="vsleft" bb="0" ab="2" r="0" fly="1" csb="1" bf="2" ip="1.0" h="0" so="1" er="0"></psituation>  
+      <psituation inn="6" context="byinn" bb="0" ab="3" r="0" fly="1" bf="3" ip="1.0" h="1" so="1" er="0"></psituation>  
+      <psituation inn="5" context="byinn" bb="0" ab="4" r="0" pickoff="1" csb="1" bf="4" ip="1.0" h="1" so="1" er="0"></psituation>  
+      <psituation context="vsleft" bb="0" ab="3" r="0" fly="2" csb="1" bf="3" ip="1.1" h="0" so="1" er="0"></psituation>  
+      <psituation inn="7" context="byinn" bb="0" ab="3" kl="1" r="0" fly="1" bf="3" ip="1.0" h="0" ground="1" so="1" er="0"></psituation>  
       <psituation inn="2" context="byinn" bb="0" ab="3" r="0" fly="3" bf="3" ip="1.0" h="0" so="0" er="0"></psituation>  
       <psituation inn="1" context="byinn" bb="1" ab="3" kl="1" r="0" bf="5" ip="1.0" hbp="1" h="1" so="2" er="0"></psituation>  
       <psituation inn="4" context="byinn" bb="0" ab="3" r="0" bf="3" ip="1.0" h="2" ground="1" so="0" er="0"></psituation>  
-      <psituation context="vsright" bb="1" ab="13" kl="1" bf="15" ip="3.2" h="5" er="0" r="0" fly="2" gdp="1" csb="1" hbp="1" ground="2" so="2"></psituation>  
+      <psituation context="vsright" bb="1" ab="20" kl="2" pickoff="1" bf="22" ip="5.2" h="7" er="0" r="0" fly="3" gdp="1" csb="1" hbp="1" ground="3" so="4"></psituation>  
       <psituation inn="3" context="byinn" bb="0" ab="4" r="0" gdp="1" csb="1" bf="4" ip="1.0" h="2" ground="1" so="0" er="0"></psituation>  
-      <psituation context="runners" bb="0" ab="7" r="0" gdp="1" csb="2" bf="8" ip="3.1" hbp="1" h="2" ground="2" so="2" er="0"></psituation>  
-      <psituation context="empty" bb="1" ab="8" kl="1" r="0" fly="3" bf="9" ip="1.1" h="3" so="1" er="0"></psituation>  
+      <psituation context="runners" bb="0" ab="9" pickoff="1" bf="10" ip="4.1" h="2" er="0" r="0" gdp="1" fly="1" csb="2" hbp="1" ground="2" so="2"></psituation>  
+      <psituation context="empty" bb="1" ab="14" kl="2" r="0" fly="4" bf="15" ip="2.2" h="5" ground="1" so="3" er="0"></psituation>  
       <psituation context="scorepos" bb="0" ab="5" r="0" csb="2" bf="5" ip="2.2" h="1" ground="1" so="2" er="0"></psituation>  
-      <psituation context="leadoff" bb="0" ab="5" kl="1" r="0" fly="1" bf="5" ip="0.2" h="2" so="1" er="0"></psituation>  
-      <psituation context="runners2" bb="0" ab="2" r="0" csb="1" bf="2" ip="0.2" h="0" so="1" er="0"></psituation> 
+      <psituation context="leadoff" bb="0" ab="7" kl="1" r="0" fly="2" bf="7" ip="1.0" h="3" so="1" er="0"></psituation>  
+      <psituation context="runners2" bb="0" ab="3" r="0" pickoff="1" csb="1" bf="3" ip="1.0" h="0" so="1" er="0"></psituation> 
     </player>  
     <player name="Nico Hoerner" shortname="Nico Hoerner" revname="Hoerner, Nico" uni="2" gp="1" gs="1" spot="2" code="2" bats="R" throws="R" pos="c" playerId="x18syxlwgdmk7q27" atpos="c"> 
-      <hitting r="2" h="1" ab="3" rbi="0" double="1" so="1" ground="1" hitdp="1" slg=".667" obp=".333" ops="1.000"></hitting>  
-      <fielding po="3" a="2" e="1" csb="1" indp="1" sba="2"></fielding>  
-      <hsitsummary rcherr="1" ground="1" lob="1" advops="2,3" wrbiops="0,2" wrunners="1,3"></hsitsummary>  
+      <hitting r="2" h="1" ab="4" rbi="0" double="1" so="1" gdp="1" ground="2" hitdp="2" slg=".500" obp=".250" ops=".750"></hitting>  
+      <fielding po="4" a="3" e="1" csb="1" indp="1" sba="2"></fielding>  
+      <hsitsummary rcherr="1" rchfc="1" ground="2" lob="1" advops="2,4" wrbiops="0,3" wrunners="1,4"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
-      <hsituation context="scorepos" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="1"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="2" r="0" h="0" rbi="0" ground="1" so="1" out="1"></hsituation>  
+      <hsituation context="scorepos" ab="3" rchfc="1" r="0" gdp="1" h="0" rbi="0" ground="2" so="1" dp="1" out="1"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="3" rchfc="1" r="0" gdp="1" h="0" rbi="0" ground="2" so="1" dp="1" out="1"></hsituation>  
       <hsituation pitcher="Chloe Middlebrooks" context="vspitcher" ab="1" r="0" double="1" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation pos="c" context="bypos" ue="1" ab="3" r="2" double="1" h="1" rbi="0" ground="1" so="1" out="1"></hsituation>  
-      <hsituation context="vsright" ue="1" ab="3" r="2" double="1" h="1" rbi="0" ground="1" so="1" out="1"></hsituation>  
-      <hsituation spot="2" context="byspot" ue="1" ab="3" r="2" double="1" h="1" rbi="0" ground="1" so="1" out="1"></hsituation>  
-      <hsituation context="runners" ab="3" r="0" double="1" h="1" rbi="0" ground="1" so="1" out="1"></hsituation>  
-      <fsituation pos="c" context="bypos" indp="1" a="2" sba="2" csb="2" e="1" po="3"></fsituation> 
+      <hsituation pos="c" context="bypos" ue="1" ab="4" rchfc="1" r="2" gdp="1" double="1" h="1" rbi="0" ground="2" so="1" dp="1" out="2"></hsituation>  
+      <hsituation context="vsright" ue="1" ab="4" rchfc="1" r="2" gdp="1" double="1" h="1" rbi="0" ground="2" so="1" dp="1" out="2"></hsituation>  
+      <hsituation spot="2" context="byspot" ue="1" ab="4" rchfc="1" r="2" gdp="1" double="1" h="1" rbi="0" ground="2" so="1" dp="1" out="2"></hsituation>  
+      <hsituation context="runners" ab="4" rchfc="1" r="0" gdp="1" double="1" h="1" rbi="0" ground="2" so="1" dp="1" out="1"></hsituation>  
+      <fsituation pos="c" context="bypos" indp="1" a="3" sba="2" csb="2" e="1" po="4"></fsituation> 
     </player>  
     <player name="Steve Bartman" shortname="Steve Bartman" revname="Bartman, Steve" uni="3" gp="1" gs="1" spot="3" code="3" bats="R" throws="R" pos="1b" playerId="r4n9m6ugtxdr5obr" atpos="1b"> 
-      <hitting r="3" h="3" ab="3" rbi="6" triple="1" hr="1" slg="2.667" obp="1.000" ops="3.667"></hitting>  
-      <fielding po="3" a="0" e="1" indp="2"></fielding>  
-      <hsitsummary advops="2,2" wloaded="1,1" wrbiops="2,2" wrunners="2,2" rbi3rd="2,2"></hsitsummary>  
+      <hitting r="3" h="3" ab="4" rbi="6" triple="1" hr="1" slg="2.000" obp=".750" ops="2.750"></hitting>  
+      <fielding po="7" a="0" e="1" indp="3"></fielding>  
+      <hsitsummary advops="2,2" leadoff="0,1" wloaded="1,1" wrbiops="2,2" wrunners="2,2" rbi3rd="2,2"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
       <hsituation context="loaded" ab="1" r="0" triple="1" h="1" rbi="3" out="0"></hsituation>  
       <hsituation context="scorepos" ab="2" r="1" triple="1" h="2" rbi="6" hr="1" out="0"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="2" r="0" triple="1" h="2" rbi="3" out="0"></hsituation>  
-      <hsituation context="leadoff" ab="0" r="0" h="0" rbi="0" out="0"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="3" r="0" fly="1" triple="1" h="2" rbi="3" out="1"></hsituation>  
+      <hsituation context="leadoff" ab="1" r="0" fly="1" h="0" rbi="0" out="1"></hsituation>  
       <hsituation pitcher="Chloe Middlebrooks" context="vspitcher" ab="1" r="1" h="1" rbi="3" hr="1" out="0"></hsituation>  
-      <hsituation pos="1b" context="bypos" ue="1" ab="3" r="3" triple="1" h="3" rbi="6" hr="1" out="0"></hsituation>  
-      <hsituation context="vsright" ue="1" ab="3" r="3" triple="1" h="3" rbi="6" hr="1" out="0"></hsituation>  
+      <hsituation pos="1b" context="bypos" ue="1" ab="4" r="3" fly="1" triple="1" h="3" rbi="6" hr="1" out="1"></hsituation>  
+      <hsituation context="vsright" ue="1" ab="4" r="3" fly="1" triple="1" h="3" rbi="6" hr="1" out="1"></hsituation>  
       <hsituation context="runners" ab="2" r="1" triple="1" h="2" rbi="6" hr="1" out="0"></hsituation>  
-      <hsituation spot="3" context="byspot" ue="1" ab="3" r="3" triple="1" h="3" rbi="6" hr="1" out="0"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <fsituation pos="1b" context="bypos" indp="2" a="0" e="1" po="3"></fsituation> 
+      <hsituation spot="3" context="byspot" ue="1" ab="4" r="3" fly="1" triple="1" h="3" rbi="6" hr="1" out="1"></hsituation>  
+      <hsituation context="empty" ab="2" r="0" fly="1" h="1" rbi="0" out="1"></hsituation>  
+      <fsituation pos="1b" context="bypos" indp="3" a="0" e="1" po="7"></fsituation> 
     </player>  
     <player name="Pete Crow-Armstrong" shortname="Pete Crow-Armstrong" revname="Crow-Armstrong, Pete" uni="4" gp="1" gs="1" spot="4" code="4" bats="R" throws="R" pos="2b" playerId="fhq22dwr8u8llbs6" atpos="2b"> 
-      <hitting r="0" h="0" ab="1" rbi="0" bb="1" sf="1" ibb="1" ground="1" fly="1" slg=".000" obp=".333" ops=".333"></hitting>  
+      <hitting r="0" h="0" ab="1" rbi="0" bb="2" sf="1" ibb="1" ground="1" fly="1" slg=".000" obp=".500" ops=".500"></hitting>  
       <fielding po="6" a="2" e="0" indp="3"></fielding>  
       <hsitsummary adv="1" fly="1" ground="1" advops="1,1" rbi3rd="0,1"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
       <hsituation context="scorepos" bb="1" ab="1" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" out="1"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" bb="1" ab="1" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" out="1"></hsituation>  
-      <hsituation pos="2b" context="bypos" bb="1" ab="2" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" ground="1" out="3"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" bb="2" ab="1" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" out="1"></hsituation>  
+      <hsituation pos="2b" context="bypos" bb="2" ab="2" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" ground="1" out="3"></hsituation>  
       <hsituation pitcher="Chloe Middlebrooks" context="vspitcher" ab="1" r="0" h="0" rbi="0" ground="1" out="1"></hsituation>  
-      <hsituation context="vsright" bb="1" ab="2" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" ground="1" out="3"></hsituation>  
+      <hsituation context="vsright" bb="2" ab="2" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" ground="1" out="3"></hsituation>  
       <hsituation context="runners" bb="1" ab="1" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" out="1"></hsituation>  
-      <hsituation spot="4" context="byspot" bb="1" ab="2" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" ground="1" out="3"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" h="0" rbi="0" ground="1" out="1"></hsituation>  
+      <hsituation spot="4" context="byspot" bb="2" ab="2" r="0" fly="1" sf="1" h="0" rbi="0" ibb="1" ground="1" out="3"></hsituation>  
+      <hsituation context="empty" bb="1" ab="1" r="0" h="0" rbi="0" ground="1" out="1"></hsituation>  
       <fsituation pos="2b" context="bypos" indp="3" a="2" e="0" po="6"></fsituation> 
     </player>  
     <player name="Jon Berti" shortname="Jon Berti" revname="Berti, Jon" uni="5" gp="1" gs="1" spot="5" code="5" bats="R" throws="R" pos="3b" playerId="rhp0uhvzdtvnx3v4"> 
@@ -395,32 +407,32 @@
       <hsituation context="empty" ab="1" r="0" h="0" rbi="0" ground="1" out="1"></hsituation> 
     </player>  
     <player name="Michael Soroka" shortname="Michael Soroka" revname="Soroka, Michael" uni="99" gp="1" sub="2" spot="5" code="5" bats="R" throws="R" pos="3b" playerId="ct493f7d4wn1dqg6" atpos="3b"> 
-      <hitting r="0" h="0" ab="2" rbi="0" ground="1" slg=".000" obp=".000" ops=".000"></hitting>  
-      <fielding po="1" a="1" e="0" indp="1"></fielding>  
-      <hsitsummary rcherr="1" rchfc="1" ground="1" advops="1,2" wrbiops="0,2" wrunners="0,2" rbi3rd="0,2"></hsitsummary>  
+      <hitting r="0" h="1" ab="3" rbi="0" double="1" ground="1" slg=".667" obp=".333" ops="1.000"></hitting>  
+      <fielding po="1" a="1" e="1" indp="1"></fielding>  
+      <hsitsummary rcherr="1" rchfc="1" ground="1" advops="2,3" wrbiops="1,3" wrunners="1,3" rbi3rd="0,2"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
-      <hsituation context="scorepos" ab="2" rchfc="1" r="0" rcherr="1" h="0" rbi="0" ground="1" out="0"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="2" rchfc="1" r="0" rcherr="1" h="0" rbi="0" ground="1" out="0"></hsituation>  
-      <hsituation pos="3b" context="bypos" ab="2" rchfc="1" r="0" rcherr="1" h="0" rbi="0" ground="1" out="0"></hsituation>  
-      <hsituation context="vsright" ab="2" rchfc="1" r="0" rcherr="1" h="0" rbi="0" ground="1" out="0"></hsituation>  
-      <hsituation context="runners" ab="2" rchfc="1" r="0" rcherr="1" h="0" rbi="0" ground="1" out="0"></hsituation>  
-      <hsituation spot="5" context="byspot" ab="2" rchfc="1" r="0" rcherr="1" h="0" rbi="0" ground="1" out="0"></hsituation>  
+      <hsituation context="scorepos" ab="3" rchfc="1" r="0" rcherr="1" double="1" h="1" rbi="0" ground="1" out="0"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="3" rchfc="1" r="0" rcherr="1" double="1" h="1" rbi="0" ground="1" out="0"></hsituation>  
+      <hsituation pos="3b" context="bypos" ab="3" rchfc="1" r="0" rcherr="1" double="1" h="1" rbi="0" ground="1" out="1"></hsituation>  
+      <hsituation context="vsright" ab="3" rchfc="1" r="0" rcherr="1" double="1" h="1" rbi="0" ground="1" out="1"></hsituation>  
+      <hsituation context="runners" ab="3" rchfc="1" r="0" rcherr="1" double="1" h="1" rbi="0" ground="1" out="0"></hsituation>  
+      <hsituation spot="5" context="byspot" ab="3" rchfc="1" r="0" rcherr="1" double="1" h="1" rbi="0" ground="1" out="1"></hsituation>  
       <fsituation pos="3b" context="bypos" indp="1" a="1" e="0" po="1"></fsituation> 
     </player>  
     <player name="Matt Shaw" shortname="Matt Shaw" revname="Shaw, Matt" uni="6" gp="1" gs="1" spot="6" code="6" bats="R" throws="R" pos="ss" playerId="08msjsj2tm43oapx" atpos="ss"> 
-      <hitting r="0" h="0" ab="2" rbi="0" sh="1" ground="1" fly="1" slg=".000" obp=".000" ops=".000"></hitting>  
-      <fielding po="0" a="2" e="0" indp="1"></fielding>  
-      <hsitsummary rcherr="1" adv="1" fly="1" ground="1" advops="1,2" w2outs="0,1" wrbiops="0,1" wrunners="0,1" rbi3rd="0,1"></hsitsummary>  
+      <hitting r="0" h="0" ab="2" rbi="0" sh="1" sf="1" ground="1" fly="2" hitdp="1" slg=".000" obp=".000" ops=".000"></hitting>  
+      <fielding po="1" a="3" e="0" indp="2"></fielding>  
+      <hsitsummary rcherr="1" adv="1" fly="2" ground="1" advops="1,2" w2outs="0,1" wrbiops="0,1" wrunners="0,1" rbi3rd="0,2"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
-      <hsituation spot="6" context="byspot" ab="2" r="0" rcherr="1" fly="1" sh="1" h="0" rbi="0" ground="1" out="2"></hsituation>  
-      <hsituation context="scorepos" ab="1" r="0" fly="1" sh="1" h="0" rbi="0" ground="1" out="2"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="1" r="0" fly="1" sh="1" h="0" rbi="0" ground="1" out="2"></hsituation>  
+      <hsituation spot="6" context="byspot" ab="3" r="0" rcherr="1" fly="2" sf="1" sh="1" h="0" rbi="0" ground="1" out="3"></hsituation>  
+      <hsituation context="scorepos" ab="2" r="0" fly="2" sf="1" sh="1" h="0" rbi="0" ground="1" out="3"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="2" r="0" fly="2" sf="1" sh="1" h="0" rbi="0" ground="1" out="3"></hsituation>  
       <hsituation pitcher="Chloe Middlebrooks" context="vspitcher" ab="1" r="0" rcherr="1" h="0" rbi="0" out="0"></hsituation>  
-      <hsituation context="vsright" ab="2" r="0" rcherr="1" fly="1" sh="1" h="0" rbi="0" ground="1" out="2"></hsituation>  
-      <hsituation context="runners" ab="1" r="0" fly="1" sh="1" h="0" rbi="0" ground="1" out="2"></hsituation>  
-      <hsituation pos="ss" context="bypos" ab="2" r="0" rcherr="1" fly="1" sh="1" h="0" rbi="0" ground="1" out="2"></hsituation>  
+      <hsituation context="vsright" ab="3" r="0" rcherr="1" fly="2" sf="1" sh="1" h="0" rbi="0" ground="1" out="3"></hsituation>  
+      <hsituation context="runners" ab="2" r="0" fly="2" sf="1" sh="1" h="0" rbi="0" ground="1" out="3"></hsituation>  
+      <hsituation pos="ss" context="bypos" ab="3" r="0" rcherr="1" fly="2" sf="1" sh="1" h="0" rbi="0" ground="1" out="3"></hsituation>  
       <hsituation context="empty" ab="1" r="0" rcherr="1" h="0" rbi="0" out="0"></hsituation>  
-      <fsituation pos="ss" context="bypos" indp="1" a="2" e="0" po="0"></fsituation> 
+      <fsituation pos="ss" context="bypos" indp="2" a="3" e="0" po="1"></fsituation> 
     </player>  
     <player name="Dansby Swanson" shortname="Dansby Swanson" revname="Swanson, Dansby" uni="7" gp="1" gs="1" spot="7" code="7" bats="R" throws="R" pos="lf" playerId="aiikrpezm4i7i354"> 
       <hitting r="0" h="0" ab="1" rbi="0" slg=".000" obp=".000" ops=".000"></hitting>  
@@ -450,7 +462,7 @@
     </player>  
     <player name="Ian Happ" shortname="Ian Happ" revname="Happ, Ian" uni="8" gp="1" gs="1" spot="8" code="8" bats="R" throws="R" pos="cf" playerId="fo7pqs3qxqrd30b8" atpos="cf"> 
       <hitting r="0" h="1" ab="3" rbi="0" fly="1" slg=".333" obp=".333" ops=".667"></hitting>  
-      <fielding po="0" a="1" e="0"></fielding>  
+      <fielding po="1" a="1" e="0"></fielding>  
       <hsitsummary fly="1" lob="4" advops="0,2" w2outs="0,2" wrbiops="0,2" wrunners="0,2"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
       <hsituation spot="8" context="byspot" ab="3" r="0" fly="1" h="1" rbi="0" out="3"></hsituation>  
@@ -464,20 +476,20 @@
       <hsituation context="runners" ab="2" r="0" fly="1" h="0" rbi="0" out="2"></hsituation>  
       <hsituation context="runners2" ab="2" r="0" fly="1" h="0" rbi="0" out="2"></hsituation>  
       <hsituation context="empty" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <fsituation pos="cf" context="bypos" a="1" e="0" po="0"></fsituation> 
+      <fsituation pos="cf" context="bypos" a="1" e="0" po="1"></fsituation> 
     </player>  
     <player name="Miguel Amaya" shortname="Miguel Amaya" revname="Amaya, Miguel" uni="9" gp="1" gs="1" spot="9" code="9" bats="R" throws="R" pos="rf" playerId="jap3yz38kybp30ch" atpos="rf"> 
-      <hitting r="1" h="1" ab="2" rbi="0" so="1" slg=".500" obp=".500" ops="1.000"></hitting>  
+      <hitting r="1" h="2" ab="3" rbi="0" so="1" slg=".667" obp=".667" ops="1.333"></hitting>  
       <fielding po="1" a="0" e="0"></fielding>  
-      <hsitsummary advops="1,1" leadoff="1,1" wrunners="1,1"></hsitsummary>  
+      <hsitsummary advops="1,1" leadoff="2,2" wrunners="1,1"></hsitsummary>  
       <hitseason ab="0" r="0" h="0" rbi="0" double="0" triple="0" hr="0" bb="0" so="0" ibb="0" hbp="0" kl="0" sb="0" cs="0" sh="0" sf="0" rchci="0" gdp="0" picked="0" hitdp="0" hittp="0" bavg=".000" avg=".000" slugpct="0" obpct="0"></hitseason>  
-      <hsituation spot="9" context="byspot" ab="2" r="1" h="1" rbi="0" so="1" out="0"></hsituation>  
-      <hsituation context="leadoff" ab="1" r="0" h="0" rbi="0" so="1" out="0"></hsituation>  
-      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="2" r="0" h="1" rbi="0" so="1" out="0"></hsituation>  
-      <hsituation context="vsright" ab="2" r="1" h="1" rbi="0" so="1" out="0"></hsituation>  
+      <hsituation spot="9" context="byspot" ab="3" r="1" h="2" rbi="0" so="1" out="1"></hsituation>  
+      <hsituation context="leadoff" ab="2" r="0" h="1" rbi="0" so="1" out="0"></hsituation>  
+      <hsituation pitcher="Judd Wascom" context="vspitcher" ab="3" r="0" h="2" rbi="0" so="1" out="0"></hsituation>  
+      <hsituation context="vsright" ab="3" r="1" h="2" rbi="0" so="1" out="1"></hsituation>  
       <hsituation context="runners" ab="1" r="0" h="1" rbi="0" out="0"></hsituation>  
-      <hsituation pos="rf" context="bypos" ab="2" r="1" h="1" rbi="0" so="1" out="0"></hsituation>  
-      <hsituation context="empty" ab="1" r="0" h="0" rbi="0" so="1" out="0"></hsituation>  
+      <hsituation pos="rf" context="bypos" ab="3" r="1" h="2" rbi="0" so="1" out="1"></hsituation>  
+      <hsituation context="empty" ab="2" r="0" h="1" rbi="0" so="1" out="0"></hsituation>  
       <fsituation pos="rf" context="bypos" a="0" e="0" po="1"></fsituation> 
     </player>  
     <player name="Sam Schneide" shortname="Sam Schneide" revname="Schneide, Sam" uni="31" gp="0" pos="" spot="0" code="" bats="R" throws="R"></player>  
@@ -968,10 +980,148 @@
           <pitcher name="Will Castro"></pitcher>  
           <narrative text="Bella Morton Batter set to Dylan Carlson (0-0)."></narrative> 
         </play>  
-        <innsummary r="0" h="0" e="2" lob="2"></innsummary> 
+        <play seq="64" outs="2" batter="Dylan Carlson" batprof="R" pchprof="R" pitcher="Will Castro" second="Ashton Schroyer"> 
+          <runner base="2" name="Ashton Schroyer" action="++E5 UE" out="0" adv="2" tobase="4" por="" scored="1" ue="1"></runner>  
+          <pitcher name="Will Castro"></pitcher>  
+          <pitcher name="" r="1"></pitcher>  
+          <narrative text="Ashton Schroyer scored on an error by 3b, unearned."></narrative> 
+        </play>  
+        <play seq="65" outs="2" batter="Dylan Carlson" batprof="R" pchprof="R" pitcher="Will Castro"> 
+          <batter name="Dylan Carlson" action="1B" out="0" adv="1" tobase="1" ab="1" h="1"></batter>  
+          <pitcher name="Will Castro" bf="1" ab="1" h="1"></pitcher>  
+          <narrative text="Dylan Carlson singled (0-0)."></narrative> 
+        </play>  
+        <play seq="66" outs="2" batter="Maia Mumpfield" batprof="R" pchprof="R" pitcher="Will Castro" first="Dylan Carlson"> 
+          <runner base="1" name="Dylan Carlson" action="13 PO" out="1" adv="0" tobase="1" pickoff="1"></runner>  
+          <pitcher name="Will Castro" bf="1" ip="1" ab="1" pickoff="1"></pitcher>  
+          <fielder pos="p" name="Will Castro" po="0" a="1"></fielder>  
+          <fielder pos="1b" name="Steve Bartman" po="1"></fielder>  
+          <narrative text="Dylan Carlson out at first p to 1b, picked off."></narrative> 
+        </play>  
+        <innsummary r="1" h="1" e="2" lob="1"></innsummary> 
+      </batting>  
+      <batting vh="H" id="STATS2"> 
+        <play seq="67" outs="0" batter="Miguel Amaya" batprof="R" pchprof="R" pitcher="Judd Wascom"> 
+          <batter name="Miguel Amaya" action="1B" out="0" adv="1" tobase="1" ab="1" h="1"></batter>  
+          <pitcher name="Judd Wascom" bf="1" ab="1" h="1"></pitcher>  
+          <narrative text="Miguel Amaya singled (0-0)."></narrative> 
+        </play>  
+        <play seq="68" outs="0" batter="Will Castro" batprof="R" pchprof="R" pitcher="Judd Wascom" first="Miguel Amaya"> 
+          <batter name="Will Castro" action="1B" out="0" adv="1" tobase="1" ab="1" h="1"></batter>  
+          <runner base="1" name="Miguel Amaya" action="+" out="0" adv="1" tobase="2"></runner>  
+          <pitcher name="Judd Wascom" bf="1" ab="1" h="1"></pitcher>  
+          <pitches name="Judd Wascom" text="BBP" b="2" s="0"></pitches>  
+          <narrative text="Will Castro singled (2-0 BB); Miguel Amaya advanced to second."></narrative> 
+        </play>  
+        <play seq="69" outs="0" batter="Nico Hoerner" batprof="R" pchprof="R" pitcher="Judd Wascom" first="Will Castro" second="Miguel Amaya"> 
+          <batter name="Nico Hoerner" action="FC" out="0" adv="1" tobase="1" ab="1" rchfc="1" gndout="1" dp="1" gdp="1"></batter>  
+          <runner base="1" name="Will Castro" action="554 GDP" out="1" adv="0" tobase="1"></runner>  
+          <runner base="2" name="Miguel Amaya" action="X" out="1" adv="0" tobase="2"></runner>  
+          <pitcher name="Judd Wascom" bf="1" ab="1" gndout="1" ip="2" gdp="1"></pitcher>  
+          <fielder pos="2b" name="Payton Oconnor" po="1" indp="1"></fielder>  
+          <fielder pos="3b" name="s g" po="1" indp="1" a="1"></fielder>  
+          <narrative text="Nico Hoerner reached on a fielder's choice (0-0); Will Castro out on double play 3b to 2b; Miguel Amaya out on the play."></narrative> 
+        </play>  
+        <play seq="70" outs="2" batter="Steve Bartman" batprof="R" pchprof="R" pitcher="Judd Wascom" first="Nico Hoerner"> 
+          <runner base="1" name="Nico Hoerner" action="BK" out="0" adv="1" tobase="2"></runner>  
+          <pitcher name="Judd Wascom" bk="1"></pitcher>  
+          <narrative text="Nico Hoerner advanced to second on a balk."></narrative> 
+        </play>  
+        <play seq="71" outs="2" batter="Steve Bartman" batprof="R" pchprof="R" pitcher="Judd Wascom" second="Nico Hoerner"> 
+          <runner base="2" name="Nico Hoerner" action="1654546328" out="1" adv="0" tobase="2"></runner>  
+          <pitcher name="Judd Wascom" bf="1" ip="1" ab="1"></pitcher>  
+          <fielder pos="p" name="Judd Wascom" po="0" a="1"></fielder>  
+          <fielder pos="c" name="Bella Morton" po="0" a="1"></fielder>  
+          <fielder pos="1b" name="Ashton Schroyer" po="0" a="1"></fielder>  
+          <fielder pos="2b" name="Payton Oconnor" po="0" a="1"></fielder>  
+          <fielder pos="3b" name="s g" po="0" a="1"></fielder>  
+          <fielder pos="ss" name="Maia Mumpfield" po="0" a="1"></fielder>  
+          <fielder pos="cf" name="Kiki Edwards" po="1"></fielder>  
+          <narrative text="Nico Hoerner out at third p to ss to 3b to 2b to 3b to 2b to ss to 1b to c to cf."></narrative> 
+        </play>  
+        <innsummary r="0" h="2" e="0" lob="1"></innsummary> 
+      </batting> 
+    </inning>  
+    <inning number="6"> 
+      <batting vh="V" id="STATS1"> 
+        <play seq="72" outs="0" batter="Maia Mumpfield" batprof="R" pchprof="R" pitcher="Will Castro"> 
+          <batter name="Maia Mumpfield" action="1B" out="0" adv="1" tobase="1" ab="1" h="1"></batter>  
+          <pitcher name="Will Castro" bf="1" ab="1" h="1"></pitcher>  
+          <narrative text="Maia Mumpfield singled (0-0)."></narrative> 
+        </play>  
+        <play seq="73" outs="0" batter="s g" batprof="R" pchprof="R" pitcher="Will Castro" first="Maia Mumpfield"> 
+          <batter name="s g" action="L63 DP" out="1" adv="0" tobase="0" ab="1" flyout="1"></batter>  
+          <runner base="1" name="Maia Mumpfield" action="X" out="1" adv="0" tobase="1"></runner>  
+          <pitcher name="Will Castro" bf="1" ip="2" ab="1" flyout="1"></pitcher>  
+          <pitches name="Will Castro" text="BBKP" b="2" s="1"></pitches>  
+          <fielder pos="1b" name="Steve Bartman" po="1" indp="1"></fielder>  
+          <fielder pos="ss" name="Matt Shaw" po="1" indp="1" a="1"></fielder>  
+          <narrative text="s g lined into double play ss to 1b (2-1 BBK); Maia Mumpfield out on the play."></narrative> 
+        </play>  
+        <play seq="74" outs="2" batter="Payton Oconnor" batprof="R" pchprof="R" pitcher="Will Castro"> 
+          <batter name="Payton Oconnor" action="K 23" out="1" adv="0" tobase="0" ab="1" so="1"></batter>  
+          <pitcher name="Will Castro" bf="1" ab="1" so="1" ip="1"></pitcher>  
+          <pitches name="Will Castro" text="KKP" b="0" s="2"></pitches>  
+          <fielder pos="c" name="Nico Hoerner" po="0" a="1"></fielder>  
+          <fielder pos="1b" name="Steve Bartman" po="1"></fielder>  
+          <narrative text="Payton Oconnor struck out, out at first c to 1b (0-2 KK)."></narrative> 
+        </play>  
+        <innsummary r="0" h="1" e="0" lob="0"></innsummary> 
+      </batting>  
+      <batting vh="H" id="STATS2"> 
+        <play seq="75" outs="0" batter="Steve Bartman" batprof="R" pchprof="R" pitcher="Judd Wascom"> 
+          <batter name="Steve Bartman" action="I4" out="1" adv="0" tobase="0" ab="1" flyout="1"></batter>  
+          <pitcher name="Judd Wascom" bf="1" ip="1" ab="1" flyout="1"></pitcher>  
+          <fielder pos="2b" name="Payton Oconnor" po="1"></fielder>  
+          <narrative text="Steve Bartman infield fly to 2b (0-0)."></narrative> 
+        </play>  
+        <play seq="76" outs="1" batter="Pete Crow-Armstrong" batprof="R" pchprof="R" pitcher="Judd Wascom"> 
+          <batter name="Pete Crow-Armstrong" action="BB WP" out="0" adv="2" tobase="2" bb="1"></batter>  
+          <pitcher name="Judd Wascom" bf="1" bb="1" wp="1"></pitcher>  
+          <narrative text="Pete Crow-Armstrong walked, advanced to second on a wild pitch (0-0)."></narrative> 
+        </play>  
+        <play seq="77" outs="1" batter="Michael Soroka" batprof="R" pchprof="R" pitcher="Judd Wascom" second="Pete Crow-Armstrong"> 
+          <batter name="Michael Soroka" action="2B GR" out="0" adv="2" tobase="2" ab="1" h="1" double="1"></batter>  
+          <runner base="2" name="Pete Crow-Armstrong" action="+" out="0" adv="1" tobase="3"></runner>  
+          <pitcher name="Judd Wascom" bf="1" ab="1" h="1" double="1"></pitcher>  
+          <narrative text="Michael Soroka doubled, ground-rule (0-0); Pete Crow-Armstrong advanced to third."></narrative> 
+        </play>  
+        <play seq="78" outs="1" batter="Matt Shaw" batprof="R" pchprof="R" pitcher="Judd Wascom" second="Michael Soroka" third="Pete Crow-Armstrong"> 
+          <batter name="Matt Shaw" action="F8 SF DP" out="1" adv="0" tobase="0" ab="1" flyout="1" sf="1"></batter>  
+          <runner base="2" name="Michael Soroka" action="X" out="1" adv="0" tobase="2"></runner>  
+          <pitcher name="Judd Wascom" bf="1" ip="2" ab="1" flyout="1" sfa="1"></pitcher>  
+          <fielder pos="cf" name="Kiki Edwards" po="2" indp="1"></fielder>  
+          <narrative text="Matt Shaw flied into double play cf, sacrifice fly (0-0); Michael Soroka out on the play."></narrative> 
+        </play>  
+        <innsummary r="0" h="1" e="0" lob="1"></innsummary> 
+      </batting> 
+    </inning>  
+    <inning number="7"> 
+      <batting vh="V" id="STATS1"> 
+        <play seq="79" outs="0" batter="Ashton Schroyer" batprof="L" pchprof="R" pitcher="Will Castro"> 
+          <batter name="Ashton Schroyer" action="FF8" out="1" adv="0" tobase="0" ab="1" flyout="1"></batter>  
+          <pitcher name="Will Castro" bf="1" ip="1" ab="1" flyout="1"></pitcher>  
+          <fielder pos="cf" name="Ian Happ" po="1"></fielder>  
+          <narrative text="Ashton Schroyer fouled out to cf (0-0)."></narrative> 
+        </play>  
+        <play seq="80" outs="1" batter="Bella Morton" batprof="R" pchprof="R" pitcher="Will Castro"> 
+          <batter name="Bella Morton" action="KL" out="1" adv="0" tobase="0" ab="1" so="1" kl="1"></batter>  
+          <pitcher name="Will Castro" ip="1" bf="1" ab="1" so="1" kl="1"></pitcher>  
+          <pitches name="Will Castro" text="KSBFK" b="1" s="3"></pitches>  
+          <fielder pos="c" name="Nico Hoerner" po="1"></fielder>  
+          <narrative text="Bella Morton struck out looking (1-2 KSBFK)."></narrative> 
+        </play>  
+        <play seq="81" outs="2" batter="Judd Wascom" batprof="R" pchprof="R" pitcher="Will Castro"> 
+          <batter name="Judd Wascom" action="13" out="1" adv="0" tobase="0" ab="1" gndout="1"></batter>  
+          <pitcher name="Will Castro" bf="1" ip="1" ab="1" gndout="1"></pitcher>  
+          <fielder pos="p" name="Will Castro" po="0" a="1"></fielder>  
+          <fielder pos="1b" name="Steve Bartman" po="1"></fielder>  
+          <narrative text="Judd Wascom grounded out to p (0-0)."></narrative> 
+        </play>  
+        <innsummary r="0" h="0" e="0" lob="0"></innsummary> 
       </batting> 
     </inning> 
   </plays>  
-  <status complete="N" inning="5" endinn="N" vh="V" batting="STATS1" outs="2" pitcher="Will Castro" batter="Dylan Carlson" first="" second="Ashton Schroyer" third="" vup="3" hup="9" b="0" s="0" np="0"></status> 
+  <status complete="Y"></status> 
 </bsgame>
 

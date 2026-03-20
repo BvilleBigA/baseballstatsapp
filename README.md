@@ -1,23 +1,24 @@
-# Baseball/Softball Stats App
+# Gameday Stats
 
-A self-hosted baseball and softball statistics tracking web application. Import game data from PrestoSports/DakStats XML files and view league standings, team stats, player stats, box scores, and play-by-play.
+A self-hosted baseball and softball statistics web application. Import game data from Gameday Stats / DakStats XML files, run live score entry, and view league schedules, box scores, and play-by-play.
 
 ## Features
 
-- **Multi-team league** support with standings
-- **XML game import** — upload PrestoSports-format game files
+- **Seasons & events** — schedules, lineups, and game management
+- **Live stat entry** — browser-based scoring aligned with Gameday Stats workflows
+- **XML import** — Gameday Stats–format game files
 - **Full box scores** — line scores, batting, pitching, fielding
-- **Player pages** — season totals, game log
 - **Play-by-play** with pitch sequences
 - **Computed stats** — AVG, OBP, SLG, OPS, ERA, WHIP, FPCT
 - **REST API** for programmatic access
-- **Mobile-friendly** responsive design
+- **Responsive** admin UI
 
 ## Quick Start (Mac)
 
 ```bash
-# 1. Clone the repo
-git clone <repo-url> && cd baseballstatsapp
+# 1. Clone the repo (folder name can be anything; this matches the product name)
+git clone <repo-url> "Gameday Stats"
+cd "Gameday Stats"
 
 # 2. Set up Python virtual environment and install dependencies
 make setup
@@ -51,7 +52,7 @@ Options (pick one):
 
 ### Running as a background service on macOS
 
-Create `~/Library/LaunchAgents/com.baseballstats.plist`:
+Create `~/Library/LaunchAgents/com.gamedaystats.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -59,10 +60,10 @@ Create `~/Library/LaunchAgents/com.baseballstats.plist`:
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.baseballstats</string>
+    <string>com.gamedaystats</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/path/to/baseballstatsapp/venv/bin/gunicorn</string>
+        <string>/path/to/Gameday Stats/venv/bin/gunicorn</string>
         <string>-w</string>
         <string>4</string>
         <string>-b</string>
@@ -70,7 +71,7 @@ Create `~/Library/LaunchAgents/com.baseballstats.plist`:
         <string>app:create_app()</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/path/to/baseballstatsapp</string>
+    <string>/path/to/Gameday Stats</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -81,14 +82,15 @@ Create `~/Library/LaunchAgents/com.baseballstats.plist`:
 
 Then load it:
 ```bash
-launchctl load ~/Library/LaunchAgents/com.baseballstats.plist
+launchctl load ~/Library/LaunchAgents/com.gamedaystats.plist
 ```
 
 ## Usage
 
-1. **Create a league** — Click "Create League" on the home page
-2. **Upload game XML** — Click "Upload Game" and select your PrestoSports XML file(s)
-3. **Browse stats** — View standings, click into teams, players, and box scores
+1. **Sign in** — Log in to open the Gameday Stats dashboard (scores, seasons, checklist).
+2. **Seasons & games** — Create or select a season, add events, and enter lineups.
+3. **Score games** — Launch stat entry for an event from the game detail page.
+4. **Box scores** — View printable box scores and stat history from each game.
 
 ## API Endpoints
 
@@ -101,4 +103,4 @@ launchctl load ~/Library/LaunchAgents/com.baseballstats.plist
 - Python 3 / Flask
 - SQLite (via SQLAlchemy)
 - Gunicorn (production)
-- No JavaScript frameworks — vanilla HTML/CSS/JS
+- Gameday Stats (GWT) stat entry bundle + custom Flask templates

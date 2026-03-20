@@ -20,17 +20,17 @@
             </tr>
             <tr class="second">
                 <td class="sbtl">{{ game.visitor_team.abbreviation or game.visitor_team.name[:3]|upper }}</td>
-                {% for inn in innings %}<td>{{ inn.visitor_score }}</td>{% endfor %}
+                {% for inn in innings %}<td>{{ 'X' if inn.visitor_score in ('X', '99', 99) else (inn.visitor_score or '0') }}</td>{% endfor %}
                 {% if not innings %}<td class="hilite">0</td>{% endif %}
-                <td class="totals-col">{{ game.visitor_runs }}</td>
+                <td class="totals-col">{{ visitor_runs }}</td>
                 <td>{{ game.visitor_hits }}</td>
                 <td>{{ game.visitor_errors }}</td>
             </tr>
             <tr class="third">
                 <td class="sbtl">{{ game.home_team.abbreviation or game.home_team.name[:3]|upper }}</td>
-                {% for inn in innings %}<td>{{ inn.home_score }}</td>{% endfor %}
+                {% for inn in innings %}<td>{{ 'X' if inn.home_score in ('X', '99', 99) else (inn.home_score or '0') }}</td>{% endfor %}
                 {% if not innings %}<td>-</td>{% endif %}
-                <td class="totals-col">{{ game.home_runs }}</td>
+                <td class="totals-col">{{ home_runs }}</td>
                 <td>{{ game.home_hits }}</td>
                 <td>{{ game.home_errors }}</td>
             </tr>
@@ -259,6 +259,7 @@
                     <span id="play-entry-label">Adding play</span>
                     <span>
                         <span id="de-inning-half-text">Top 1</span>
+                        &nbsp;|&nbsp; P:&nbsp;<span id="de-status-pitcher">---</span>
                         &nbsp;|&nbsp; Outs:&nbsp;
                         <span id="de-outs" style="display:none;">0</span>
                         <span id="out-dot-0" class="out-dot"></span>
@@ -1273,9 +1274,10 @@
             document.getElementById('de-batter-num').textContent = '#' + batter.num;
         }
         var pitchers = currentHalf === 'top' ? hPitchingData : vPitchingData;
-        if (pitchers.length > 0) {
-            document.getElementById('de-pitcher-name').textContent = pitchers[pitchers.length - 1].name;
-        }
+        var pitcherName = pitchers.length > 0 ? pitchers[pitchers.length - 1].name : '---';
+        document.getElementById('de-pitcher-name').textContent = pitcherName;
+        var statusPitcher = document.getElementById('de-status-pitcher');
+        if (statusPitcher) statusPitcher.textContent = pitcherName;
         _updateRunners();
     }
 
@@ -1401,6 +1403,7 @@
         _hideAllViews();
         if (_scoringReady) {
             document.getElementById('scoring-view').style.display = 'flex';
+            updateFieldDisplay();  // ensure status bar (pitcher, etc.) is current
         } else {
             document.getElementById('section-setup-required').style.display = 'flex';
         }
@@ -2059,7 +2062,7 @@
     function actionForType(type) { return TYPE_TO_ACTION[type] || (type ? type.toUpperCase().slice(0,4) : ''); }
     var WALK_ACTIONS = ['bb','ibb','hbp','ci'];
     var BATTER_PA    = HIT_ACTIONS.concat(OUT_ACTIONS).concat(WALK_ACTIONS).concat(['sac','sf','e']);
-    var RUNNER_ONLY  = ['sb','wp','pb','bk']; // no PA for batter
+    var RUNNER_ONLY  = ['sb','cs','po','wp','pb','bk']; // no PA for batter
     // Outs produced per action
     var OUTS_MAP = {dp:2, gdp:2}; // all other out actions produce 1
 
@@ -2121,6 +2124,9 @@
         } else if (type === 'cs') {
             // Runner out
             n1 = null; n2 = r2; n3 = r3;
+        } else if (type === 'po') {
+            // Pickoff: default runner on 1B picked off
+            n1 = null; n2 = r2; n3 = r3;
         } else {
             // Outs / FC / E: keep runners where they are by default
             n1 = r1; n2 = r2; n3 = r3;
@@ -2171,21 +2177,29 @@
                           (WALK_ACTIONS.indexOf(type) !== -1 && hasRunners) ||
                           type === 'sac' || type === 'sf' || type === 'e' ||
                           type === 'fc' || type === 'sb' || type === 'cs' ||
-                          type === 'wp' || type === 'pb' || type === 'bk';
+                          type === 'wp' || type === 'pb' || type === 'bk' ||
+                          (type === 'po' && hasRunners);
 
         if (needsDialog) {
-            openAdvancementModal(type, batter, proposed);
+            var narrativeName = (type === 'po' || type === 'cs') && hasRunners
+                ? (runners.first ? runners.first.name : runners.second ? runners.second.name : runners.third ? runners.third.name : batter ? batter.name : '')
+                : (batter ? batter.name : '');
+            openAdvancementModal(type, batter, proposed, narrativeName);
+        } else if (type === 'po' && !hasRunners) {
+            outsRecorded = false;
+            return; // Pickoff requires a runner on base
         } else {
             applyAction(_pendingAction, runsScored, runsScored, 0, proposed.runners, actionForType(type), null, runners);
         }
     }
 
     // ── Runner advancement modal ───────────────────────────────────
-    function openAdvancementModal(type, batter, proposed) {
+    function openAdvancementModal(type, batter, proposed, narrativeName) {
         var scored = proposed.scored.length;
+        var nameForNarrative = (narrativeName !== undefined && narrativeName !== '') ? narrativeName : (batter ? batter.name : '');
         document.getElementById('adv-play-desc').textContent =
-            'Play: ' + buildNarrative(type, batter ? batter.name : '', 0);
-        document.getElementById('adv-narrative').value = buildNarrative(type, batter ? batter.name : '', scored);
+            'Play: ' + buildNarrative(type, nameForNarrative, 0);
+        document.getElementById('adv-narrative').value = buildNarrative(type, nameForNarrative, scored);
         document.getElementById('adv-action').value = actionForType(type);
         document.getElementById('adv-rbi').value   = scored;
         document.getElementById('adv-earned').value = scored;
@@ -2199,7 +2213,7 @@
         if (runners.third)  runnerEntries.push({r: runners.third,  was: '3B', key: 'r3'});
         if (runners.second) runnerEntries.push({r: runners.second, was: '2B', key: 'r2'});
         if (runners.first)  runnerEntries.push({r: runners.first,  was: '1B', key: 'r1'});
-        if (_pendingAction && _pendingAction.isPA && batter) {
+        if (_pendingAction && _pendingAction.isPA && !_pendingAction.isRunnerOnly && batter) {
             runnerEntries.push({r: batter, was: 'Bat', key: 'rb'});
         }
 
@@ -2289,6 +2303,7 @@
         if (runners.first)  runnerSources['r1'] = runners.first;
         if (_pendingAction.isPA && _pendingAction.batter) runnerSources['rb'] = _pendingAction.batter;
 
+        var poOutBase = null; // which base had runner picked off (1, 2, or 3)
         document.querySelectorAll('#adv-runner-table tr[data-runner-key]').forEach(function(row) {
             var key = row.getAttribute('data-runner-key');
             var runner = runnerSources[key];
@@ -2305,12 +2320,18 @@
             else if (dest === '1B') { newRunners.first  = runner; }
             else if (dest === '2B') { newRunners.second = runner; }
             else if (dest === '3B') { newRunners.third  = runner; }
-            // OUT: runner is removed (null stays)
+            else if (dest === 'OUT' && _pendingAction.type === 'po' && (key === 'r1' || key === 'r2' || key === 'r3')) {
+                poOutBase = key === 'r1' ? 1 : (key === 'r2' ? 2 : 3);
+            }
         });
 
         var rbi    = parseInt(document.getElementById('adv-rbi').value, 10) || 0;
         var earned = parseInt(document.getElementById('adv-earned').value, 10) || 0;
         var action = (document.getElementById('adv-action').value || '').trim();
+        if (_pendingAction && _pendingAction.type === 'po' && poOutBase) {
+            var throwCode = {1: '13', 2: '14', 3: '15'}[poOutBase];
+            action = (throwCode || '13') + ' PO';
+        }
         var narrative = (document.getElementById('adv-narrative').value || '').trim();
         document.getElementById('runner-adv-modal').style.display = 'none';
         applyAction(_pendingAction, scored, earned, rbi, newRunners, action, narrative, runners);

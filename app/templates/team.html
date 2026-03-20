@@ -200,22 +200,22 @@
         .sd-fg { flex: 1; min-width: 120px; }
         .sd-fg label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 3px; }
 
-        /* Buttons */
+        /* Buttons — match gameday3 skin (--main-bg-color-red) */
         .btn-gameday {
-            padding: 6px 16px; background: #d94f00; color: #fff; border: none;
+            padding: 6px 16px; background: #d10b0b; color: #fff; border: none;
             border-radius: 3px; font-size: 13px; font-weight: bold; cursor: pointer; white-space: nowrap;
         }
-        .btn-gameday:hover { background: #b84200; color: #fff; }
+        .btn-gameday:hover { background: #a80909; color: #fff; }
         .btn-del {
             padding: 3px 9px; background: #c0392b; color: #fff; border: none;
             border-radius: 3px; font-size: 12px; cursor: pointer;
         }
         .btn-del:hover { background: #a93226; }
         .btn-open-sm {
-            display: inline-block; padding: 2px 8px; background: #d94f00;
+            display: inline-block; padding: 2px 8px; background: #d10b0b;
             color: #fff; border-radius: 3px; text-decoration: none; font-size: 11px; font-weight: bold;
         }
-        .btn-open-sm:hover { background: #b84200; color: #fff; }
+        .btn-open-sm:hover { background: #a80909; color: #fff; }
 
         /* Alerts */
         .alert-ok  { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 3px; padding: 9px 14px; margin-bottom: 14px; font-size: 13px; }
@@ -249,26 +249,71 @@
         /* Two-column form grid */
         .gs-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         @media (max-width: 640px) { .gs-two-col { grid-template-columns: 1fr; } }
+
+        /* Account / profile subpages — same readable column as sign-in; colors match gameday3 skin */
+        body.gs-account-subpage #mainbody {
+            max-width: 520px;
+            margin: 0 auto;
+            padding-top: 8px;
+        }
+        body.gs-account-subpage #mainbody > h1,
+        body.gs-login-page #mainbody > h1 {
+            color: #202d43;
+        }
+        body.gs-account-subpage #mainbody .text-muted,
+        body.gs-login-page #mainbody .text-muted {
+            color: #878c99 !important;
+        }
+        body.gs-account-subpage #mainbody .gs-card,
+        body.gs-login-page #mainbody .gs-card {
+            border: 1px solid #dce1e8;
+            box-shadow: 0 1px 3px rgba(32, 45, 67, 0.06);
+        }
+        body.gs-account-subpage #mainbody .gs-card h2,
+        body.gs-login-page #mainbody .gs-card h2 {
+            color: #202d43;
+            border-bottom-color: #dce1e8;
+        }
+        body.gs-account-subpage #mainbody .sd-fg label,
+        body.gs-login-page #mainbody .sd-fg label {
+            color: #202d43;
+        }
+        .gs-back-link {
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+        .gs-back-link a {
+            color: #202d43;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .gs-back-link a:hover {
+            color: #d10b0b;
+            text-decoration: underline;
+        }
     </style>
 </head>
 
-<body class="yui-skin-sam">
+<body class="yui-skin-sam {% block body_class %}{% endblock %}">
 <div class="layout">
 
     <div class="signin navbar-fixed-top">
         <div class="row no-gutter">
+            {% block header_left %}
             <div class="col-xs-2 hidden-sm hidden-md hidden-lg">
                 <button type="button" class="left-nav-toggle navbar-toggle collapsed toggle-menu">
                     <span class="sr-only">Toggle navigation</span>
                     <span class="glyphicon glyphicon-menu-hamburger"></span>
                 </button>
             </div>
+            {% endblock %}
             <div class="logo-container col-xs-8 col-sm-10 col-md-10 col-lg-10">
-                <a class="logo" href="/admin/team/gameday3/">
+                <a class="logo" href="{% if current_user is defined and current_user %}/admin/team/gameday3/{% else %}/login{% endif %}">
                     <img src="/static/images/gameday-stats-logo-white.png" border="0" alt="Gameday Stats">
                 </a>
             </div>
             <div class="col-xs-2">
+                {% if current_user is defined and current_user %}
                 <div class="profile btn-group">
                     <button type="button"
                             class="btn btn-default btn-sm dropdown-toggle"
@@ -287,11 +332,17 @@
                         <li><a href="/logout">Sign out</a></li>
                     </ul>
                 </div>
+                {% else %}
+                <div class="profile btn-group" style="visibility:hidden;" aria-hidden="true">
+                    <button type="button" class="btn btn-default btn-sm" disabled><span class="glyphicon glyphicon-user"></span></button>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
     <div class="left-sidebar-row-offcanvas left-sidebar-row-offcanvas-left">
+        {% block sidebar %}
         <!-- sidebar -->
         <div class="left-sidebar-offcanvas" id="sidebar" role="navigation">
             <div class="left-nav">
@@ -307,6 +358,7 @@
                 </div>
             </div>
         </div>
+        {% endblock %}
 
         <!-- main area -->
         <div class="main-area">

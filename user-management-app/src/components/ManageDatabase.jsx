@@ -537,7 +537,9 @@ export default function ManageDatabase() {
       {success && <div className="alert alert-success" style={{ marginBottom: 14, backgroundColor: '#d4edda', color: '#155724', border: '1px solid #c3e6cb', borderRadius: 4, padding: '9px 14px' }}>{success}</div>}
       <nav className="MuiTypography-root MuiBreadcrumbs-root jss74 MuiTypography-body1 MuiTypography-colorTextSecondary" aria-label="breadcrumb">
         <ol className="MuiBreadcrumbs-ol" style={{ listStyle: 'none', display: 'flex', padding: 0, margin: 0, flexWrap: 'wrap', alignItems: 'center' }}>
-          <li className="MuiBreadcrumbs-li"><span>Accounts</span></li>
+          <li className="MuiBreadcrumbs-li">
+            <a href="/admin/user" style={{ color: '#D10B0B', textDecoration: 'none' }}>Accounts</a>
+          </li>
           <li aria-hidden="true" className="MuiBreadcrumbs-separator">›</li>
           <li className="MuiBreadcrumbs-li"><Link to="/manage-users" style={{ color: '#D10B0B', textDecoration: 'none' }}>Users</Link></li>
           <li aria-hidden="true" className="MuiBreadcrumbs-separator">›</li>

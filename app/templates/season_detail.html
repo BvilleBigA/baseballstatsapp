@@ -63,9 +63,7 @@
 <ul>
   <li><a id="btn-overview"  href="javascript://nop/" onclick="showTab('overview');  return false;">Overview</a></li>
   <li><a id="btn-schedule"  href="javascript://nop/" onclick="showTab('schedule');  return false;">Schedule ({{ games | length }})</a></li>
-  {% if show_teams_tab %}<li><a id="btn-teams" href="javascript://nop/" onclick="showTab('teams'); return false;">Teams ({{ teams | length }})</a></li>{% endif %}
   <li><a id="btn-roster"    href="javascript://nop/" onclick="showTab('roster');    return false;">Roster ({{ total_players }})</a></li>
-  <li><a id="btn-settings"  href="javascript://nop/" onclick="showTab('settings');  return false;">Settings</a></li>
 </ul>
 </div>
 <div id="tabContent" class="null">
@@ -135,9 +133,7 @@ events
 {% if teams | length == 0 %}
   Teams not setup<br>
 {% else %}
-  <a href="javascript://nop/" onclick="showTab('teams'); return false;">
-  {{ teams | length }}</a>
-  team{{ 's' if teams | length != 1 }}
+  {{ teams | length }} team{{ 's' if teams | length != 1 }}
 {% endif %}
 
 </p>
@@ -237,98 +233,13 @@ There are {{ tasks_left }} tasks left in <a href="/admin/team/season/setup.jsp?s
       <h3>
       Options
       </h3>
-      You can click on a date to open stats entry for that event.
+      You can click on a date to open Gameday Stats for that event.
 
   </td>
 
   </tr></tbody>
 </table>
 
-
-</div>
-
-
-<!-- ── Teams ─────────────────────────────────────────────────────────── -->
-<div id="tab-teams" style="display:none;">
-
-{% if current_user.role == 'admin' %}
-<h3>Add Team</h3>
-<form method="post" action="/admin/team/season/season.jsp?season_id={{ season.id }}&tab=teams">
-<input type="hidden" name="action" value="add_team">
-<div class="sd-form-row">
-    <div class="sd-fg" style="flex:2; min-width:160px;">
-        <label>Team Name *</label>
-        <input type="text" class="form-control" name="name" placeholder="e.g. Lady Eagles" required>
-    </div>
-    <div class="sd-fg">
-        <label>Code *</label>
-        <input type="text" class="form-control" name="code" placeholder="EAGLE">
-    </div>
-    <div class="sd-fg">
-        <label>Abbrev.</label>
-        <input type="text" class="form-control" name="abbreviation" placeholder="EGL" maxlength="6">
-    </div>
-    <div class="sd-fg">
-        <label>City</label>
-        <input type="text" class="form-control" name="city">
-    </div>
-    <div class="sd-fg" style="max-width:70px;">
-        <label>State</label>
-        <input type="text" class="form-control" name="state" maxlength="4">
-    </div>
-    <div class="sd-fg">
-        <label>Coach</label>
-        <input type="text" class="form-control" name="coach">
-    </div>
-    <div class="sd-fg" style="display:flex; align-items:flex-end;">
-        <button type="submit" class="btn btn-gameday">Add Team</button>
-    </div>
-</div>
-</form>
-{% endif %}
-
-<br>
-{% if teams %}
-<table class="seasonlist">
-<thead>
-<tr class="seasonlabel">
-    <td style="padding:6px 10px;"><b>Name</b></td>
-    <td style="padding:6px 10px;"><b>Code</b></td>
-    <td style="padding:6px 10px;"><b>Abbrev.</b></td>
-    <td style="padding:6px 10px;"><b>City</b></td>
-    <td style="padding:6px 10px;"><b>State</b></td>
-    <td style="padding:6px 10px;"><b>Coach</b></td>
-    <td style="padding:6px 10px;"><b>Players</b></td>
-    <td style="padding:6px 10px;"></td>
-</tr>
-</thead>
-<tbody>
-{% for t in teams %}
-<tr>
-    <td style="padding:7px 10px;"><strong>{{ t.name }}</strong></td>
-    <td style="padding:7px 10px;">{{ t.code }}</td>
-    <td style="padding:7px 10px;">{{ t.abbreviation }}</td>
-    <td style="padding:7px 10px;">{{ t.city or '—' }}</td>
-    <td style="padding:7px 10px;">{{ t.state or '—' }}</td>
-    <td style="padding:7px 10px;">{{ t.coach or '—' }}</td>
-    <td style="padding:7px 10px;">{{ t.players | length }}</td>
-    <td style="padding:7px 10px;">
-        {% if current_user.role == 'admin' %}
-        <form method="post" action="/admin/team/season/season.jsp?season_id={{ season.id }}&tab=teams" style="display:inline;">
-            <input type="hidden" name="action" value="delete_team">
-            <input type="hidden" name="team_id" value="{{ t.id }}">
-            <button type="submit" class="btn btn-del"
-                    onclick="return confirm('Delete team \'{{ t.name }}\'?')">Delete</button>
-        </form>
-        {% endif %}
-    </td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-{% else %}
-<p style="color:#999; font-style:italic; font-size:13px;">No teams in this season yet.</p>
-{% endif %}
 
 </div>
 
@@ -472,66 +383,6 @@ There are {{ tasks_left }} tasks left in <a href="/admin/team/season/setup.jsp?s
 </div>
 
 
-<!-- ── Settings ───────────────────────────────────────────────────────── -->
-<div id="tab-settings" style="display:none;">
-
-<h3>Season Settings</h3>
-<form method="post" action="/admin/team/season/season.jsp?season_id={{ season.id }}&tab=settings">
-<input type="hidden" name="action" value="update_season">
-<div class="sd-form-row">
-    <div class="sd-fg" style="flex:3; min-width:200px;">
-        <label>Season Name</label>
-        <input type="text" class="form-control" name="name" value="{{ season.name }}" required>
-    </div>
-    <div class="sd-fg">
-        <label>Sport</label>
-        <select class="form-control" name="sport_code">
-            {% for group_name, codes in sport_groups %}
-            <optgroup label="{{ group_name }}">
-                {% for code in codes %}
-                <option value="{{ code }}" {% if code == season.sport_code %}selected{% endif %}>
-                    {{ sport_codes[code][1] }}
-                </option>
-                {% endfor %}
-            </optgroup>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="sd-fg">
-        <label>Gender</label>
-        <select class="form-control" name="gender">
-            <option value="male"   {% if season.gender == 'male'   %}selected{% endif %}>Male</option>
-            <option value="female" {% if season.gender == 'female' %}selected{% endif %}>Female</option>
-            <option value="coed"   {% if season.gender == 'coed'   %}selected{% endif %}>Coed</option>
-        </select>
-    </div>
-    <div class="sd-fg">
-        <label>Rules</label>
-        <select class="form-control" name="rules">
-            <option value="rules_hs_ba"   {% if season.rules == 'rules_hs_ba'   %}selected{% endif %}>HS Baseball</option>
-            <option value="rules_hs_sb"   {% if season.rules == 'rules_hs_sb'   %}selected{% endif %}>HS Softball</option>
-            <option value="rules_ncaa_ba" {% if season.rules == 'rules_ncaa_ba' %}selected{% endif %}>NCAA Baseball</option>
-            <option value="rules_ncaa_sb" {% if season.rules == 'rules_ncaa_sb' %}selected{% endif %}>NCAA Softball</option>
-            <option value="rules_mlb"     {% if season.rules == 'rules_mlb'     %}selected{% endif %}>MLB</option>
-        </select>
-    </div>
-    <div class="sd-fg">
-        <label>Start Date</label>
-        <input type="date" class="form-control" name="start_date" value="{{ season.start_date or '' }}">
-    </div>
-    <div class="sd-fg">
-        <label>End Date</label>
-        <input type="date" class="form-control" name="end_date" value="{{ season.end_date or '' }}">
-    </div>
-    <div class="sd-fg" style="display:flex; align-items:flex-end;">
-        <button type="submit" class="btn btn-gameday">Save Settings</button>
-    </div>
-</div>
-</form>
-
-</div>
-
-
 </div><!-- end #tabContent -->
 
     </td>
@@ -539,11 +390,16 @@ There are {{ tasks_left }} tasks left in <a href="/admin/team/season/setup.jsp?s
   </tr></tbody></table>
 
 <script type="text/javascript">
+var GS_SEASON_TABS = ['overview', 'schedule', 'roster'];
 function showTab(name) {
+    if (GS_SEASON_TABS.indexOf(name) < 0) name = 'overview';
     document.querySelectorAll('#tabContent > div').forEach(function(p) { p.style.display = 'none'; });
     document.querySelectorAll('#tabPanel ul li a').forEach(function(t) { t.classList.remove('ajaxCurrentTab'); });
-    document.getElementById('tab-' + name).style.display = '';
-    document.getElementById('btn-' + name).classList.add('ajaxCurrentTab');
+    var panel = document.getElementById('tab-' + name);
+    if (!panel) { name = 'overview'; panel = document.getElementById('tab-overview'); }
+    panel.style.display = '';
+    var btn = document.getElementById('btn-' + name);
+    if (btn) btn.classList.add('ajaxCurrentTab');
 }
 function showTeamRoster(teamId) {
     var list = document.getElementById('roster-team-list');
@@ -560,6 +416,7 @@ function showRosterList() {
 (function() {
     var params = new URLSearchParams(window.location.search);
     var tab = params.get('tab') || 'overview';
+    if (GS_SEASON_TABS.indexOf(tab) < 0) tab = 'overview';
     showTab(tab);
     if (tab === 'roster') {
         var teamId = params.get('team_id');

@@ -1,0 +1,14 @@
+<li class="{% if request.endpoint == 'main.account_profile' %}active{% endif %}">
+    <a href="{{ url_for('main.account_profile') }}">My profile</a>
+</li>
+<li class="{% if request.endpoint == 'main.account_password' %}active{% endif %}">
+    <a href="{{ url_for('main.account_password') }}">Change password</a>
+</li>
+{% if current_user.role == 'admin' %}
+<li>
+    <a href="/admin/user/manage-users">Manage Users</a>
+</li>
+<li>
+    <a href="/admin/user/manage-database">Manage Database</a>
+</li>
+{% endif %}
