@@ -1,5 +1,7 @@
 """Flask routes for Gameday Stats."""
 
+from dotenv import load_dotenv
+load_dotenv()
 import hashlib
 import smtplib
 from email.message import EmailMessage
@@ -16,6 +18,7 @@ from app.models import (
     User, UserPermission, UserSchoolPermission, School, GameVersion, Play,
     GameRosterEntry,
 )
+
 
 main_bp = Blueprint("main", __name__)
 
