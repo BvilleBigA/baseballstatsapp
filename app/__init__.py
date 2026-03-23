@@ -177,19 +177,23 @@ def create_app(config_class=None):
                 return
         print("User 'Anderson Long' not found.")
 
-    # PrestoSync 2.1 builds GET /api/me/events with newline/tab bytes inside PATH_INFO
-    # (broken template literal in their bundle). Flask won't match /me/events → 404 →
-    # the Electron client crashes on response.data.data. Strip whitespace from PATH_INFO.
+    # PrestoSync 2.1 builds GET /api/me/events with newline/tab bytes in PATH_INFO and
+    # often in QUERY_STRING (broken template literal). That breaks routing or param parsing.
     _orig_wsgi = app.wsgi_app
+    _ws = frozenset("\n\r\t")
 
-    def _normalize_path_wsgi(environ, start_response):
+    def _normalize_presto_request_wsgi(environ, start_response):
         path = environ.get("PATH_INFO") or ""
-        if path and any(c in path for c in "\n\r\t"):
+        qs = environ.get("QUERY_STRING") or ""
+        if (path and any(c in path for c in _ws)) or (qs and any(c in qs for c in _ws)):
             environ = environ.copy()
-            environ["PATH_INFO"] = "".join(c for c in path if c not in "\n\r\t")
+            if path and any(c in path for c in _ws):
+                environ["PATH_INFO"] = "".join(c for c in path if c not in _ws)
+            if qs and any(c in qs for c in _ws):
+                environ["QUERY_STRING"] = "".join(c for c in qs if c not in _ws)
         return _orig_wsgi(environ, start_response)
 
-    app.wsgi_app = _normalize_path_wsgi
+    app.wsgi_app = _normalize_presto_request_wsgi
 
     return app
 

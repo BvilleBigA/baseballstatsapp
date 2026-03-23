@@ -131,9 +131,16 @@ def _team_logo_url(team):
 def _team_payload(team):
     if not team:
         return None
+    # PrestoSync EventList table reads team.season.seasonName and team.sportId (DataElement).
+    # Missing nested season crashes the renderer with a blank screen.
+    season_obj = getattr(team, "season", None)
+    season_name = (season_obj.name or "") if season_obj else ""
+    sport_id = str(season_obj.sport_id) if season_obj and season_obj.sport_id is not None else "1"
     return {
         "teamName": team.name or "",
         "logo": _team_logo_url(team) or "",
+        "season": {"seasonName": season_name},
+        "sportId": sport_id,
     }
 
 
