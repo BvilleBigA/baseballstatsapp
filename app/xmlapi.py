@@ -1,5 +1,5 @@
 """
-XML export blueprint — generates Gameday Stats bsgame XML for completed/in-progress games.
+XML export blueprint — generates Gameday LiveStats bsgame XML for completed/in-progress games.
 
 Route:  GET /game/<event_id>/boxscore.xml
         GET /game/<event_id>/boxscore.xml?download=1   (force file download)
@@ -38,6 +38,15 @@ def _venue_date(date_str):
         return date_str
 
 
+def _game_season(game):
+    """Resolve Season from visitor or home team (Game has no direct season relationship)."""
+    if game.visitor_team and game.visitor_team.season_id:
+        return game.visitor_team.season
+    if game.home_team and game.home_team.season_id:
+        return game.home_team.season
+    return None
+
+
 def _short_name(player):
     """Return 'Last, F.' format short name, falling back to player.short_name."""
     if player.short_name:
@@ -54,7 +63,7 @@ def _short_name(player):
 
 
 def _player_id(player):
-    """Return stable unique playerId for Gameday Stats XML. Uses external_id when set, else derives from player.id."""
+    """Return stable unique playerId for Gameday LiveStats XML. Uses external_id when set, else derives from player.id."""
     if player.external_id and str(player.external_id).strip():
         return str(player.external_id).strip()
     h = hashlib.sha256(f"player_{player.id}".encode()).hexdigest()
@@ -238,7 +247,7 @@ def _indent(elem, level=0):
         elem.tail = '\n'
 
 
-# Gameday Stats GWT pitch codes (first 2 digits of 4-digit codes like 0422/0222/0122)
+# Gameday LiveStats GWT pitch codes (first 2 digits of 4-digit codes like 0422/0222/0122)
 # → letter codes: B=ball, F=foul, K=called/looking strike, S=swinging strike,
 #   P=in play, I=intentional ball, H=hit by pitch
 _GWT_PITCH_CODE = {
@@ -487,7 +496,7 @@ def _balls_strikes_from_pitch_sequence(raw):
 
 
 def _decode_pitch_sequence(raw):
-    """Convert GWT numeric pitch sequence (0422/0222/0122/...) to Gameday Stats letter format (BBSFKP)."""
+    """Convert GWT numeric pitch sequence (0422/0222/0122/...) to Gameday LiveStats letter format (BBSFKP)."""
     if not raw or not raw.strip():
         return ''
     raw = raw.strip()
@@ -511,8 +520,9 @@ def _decode_pitch_sequence(raw):
 
 def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_plays=None, all_plays=None):
     is_vis = (vh == 'V')
-    sport_id = game.season.sport_id if game.season else 1
-    rules_val = game.season.rules if game.season else ""
+    season = _game_season(game)
+    sport_id = season.sport_id if season else 1
+    rules_val = season.rules if season else ""
     # Build sub_order: player_id -> 1, 2, ... by order of SUB plays for this team
     sub_order_map = {}
     if all_plays and team:
@@ -556,7 +566,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
     record = (game.visitor_record if is_vis else game.home_record) or ''
 
     team_id_val = _xml_team_id(team)
-    # Use school RPI as the Gameday Stats team code if available
+    # Use school RPI as the Gameday LiveStats team code if available
     code_val    = (team.school.rpi if team.school and team.school.rpi else None) or team.code or ''
 
     t_elem = ET.SubElement(parent, 'team')
@@ -813,7 +823,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
     ]:
         psi.set(k, v)
 
-    # ── Roster players (exact Gameday Stats schema) ───────────────────────────
+    # ── Roster players (exact Gameday LiveStats schema) ───────────────────────────
     # Only count as "played" (gp=1) players who actually participated: starters,
     # subs, or pitchers. Lineup placeholders (BattingStats with is_starter=False,
     # is_sub=False) should get gp=0.
@@ -897,7 +907,7 @@ def _build_team(parent, team, game, vh, is_initial=False, bs_team=None, ip_from_
         else:
             atpos = pos if pos else ('p' if is_pitcher else '')
 
-        # Attribute order matches Gameday Stats exactly:
+        # Attribute order matches Gameday LiveStats exactly:
         # gp=1: name, shortname, revname, uni, gp, gs, spot, code, bats, throws, [class], pos, playerId, atpos
         # gp=0: name, shortname, revname, uni, gp, pos, spot, code, bats, throws, [class]
         p_elem = ET.SubElement(t_elem, 'player')
@@ -1588,7 +1598,7 @@ def _agg_pitching(player_id, game_ids):
     return agg
 
 
-# ── Player-level schema (exact Gameday Stats format) ───────────────────────────
+# ── Player-level schema (exact Gameday LiveStats format) ───────────────────────────
 
 def _player_hitting_schema(parent, bs, hitter_game_stats=None):
     """Player hitting: r, h, ab, rbi, slg, obp, ops always; rest conditional on non-zero (Presto format)."""
@@ -1789,7 +1799,7 @@ def _add_pchseason(parent, agg, sport_id=1, rules=""):
 # ── Main builder ──────────────────────────────────────────────────────────────
 
 def build_bsgame_xml(game):
-    """Return a UTF-8 XML string in Gameday Stats bsgame format for the given game."""
+    """Return a UTF-8 XML string in Gameday LiveStats bsgame format for the given game."""
     from datetime import date as date_cls
     d = date_cls.today()
     generated = f"{d.month:02d}/{d.day}/{d.year}"
@@ -1799,7 +1809,7 @@ def build_bsgame_xml(game):
     is_initial = play_count == 0
 
     root = ET.Element('bsgame')
-    root.set('source',    'Gameday Stats')
+    root.set('source',    'Gameday LiveStats')
     root.set('version',   '7.13.1')
     root.set('generated', generated)
 
@@ -1828,9 +1838,10 @@ def build_bsgame_xml(game):
     venue.set('start', _start)
     _sched = game.scheduled_innings
     if not _sched:
-        rules = game.season.rules if game.season else ""
-        sport_id = game.season.sport_id if game.season else 1
-        _sched = 7 if (sport_id == 11 or rules == "rules_hs_ba") else 9
+        _season = _game_season(game)
+        season_rules = _season.rules if _season else ""
+        sport_id = _season.sport_id if _season else 1
+        _sched = 7 if (sport_id == 11 or season_rules == "rules_hs_ba") else 9
     venue.set('schedinn', str(_sched))
     venue.set('weather',  game.weather or '')
 
@@ -3686,7 +3697,7 @@ def build_bsgame_xml(game):
 
     _indent(root)
     xml_bytes = ET.tostring(root, encoding='unicode', xml_declaration=False)
-    # Convert all self-closing tags to paired tags (Gameday Stats requirement)
+    # Convert all self-closing tags to paired tags (Gameday LiveStats requirement)
     # This also removes any trailing space captured before the closing />
     xml_bytes = re.sub(r'<([a-zA-Z0-9_]+)([^>]*?)\s*/>', r'<\1\2></\1>', xml_bytes)
     return '<?xml version="1.0" encoding="UTF-8"?>\n\n' + xml_bytes
