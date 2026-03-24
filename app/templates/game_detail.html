@@ -715,7 +715,7 @@
     footer { display: none; }
     body { background: #000000; }
 
-    /* .container maps to Gameday Stats #main */
+    /* .container maps to Gameday LiveStats #main */
     .container {
         max-width: none;
         width: 994px;
@@ -848,7 +848,7 @@
         text-decoration: none; white-space: nowrap; max-width: 80px;
         overflow: hidden; text-overflow: ellipsis;
     }
-    /* Current batter — orange highlight (same as Gameday Stats a.selected) */
+    /* Current batter — orange highlight (same as Gameday LiveStats a.selected) */
     .baseballField a.gwt-Anchor.selected {
         background: orange; color: #222222; text-shadow: none;
     }
@@ -1248,6 +1248,54 @@
         return battingOrder + '-' + init + ' ' + last;
     }
 
+    /** Normalize batting row position for PR/PH checks (GWT / entry may use "PR", "PH", etc.) */
+    function _batPosKey(pos) {
+        return String(pos || '').toUpperCase().replace(/\s+/g, '');
+    }
+    function _isPinchRunnerPos(pos) {
+        var p = _batPosKey(pos);
+        return p === 'PR' || p === 'PINCHRUNNER';
+    }
+    function _isPinchHitterPos(pos) {
+        var p = _batPosKey(pos);
+        return p === 'PH' || p === 'PINCHHITTER';
+    }
+
+    /**
+     * One batting-order row per slot 1–9. Pinch runners share order with the batter they
+     * ran for but never occupy the card slot (starter / PH is still due up). Pinch hitters
+     * take the slot when present.
+     */
+    function _battingOrderLineup(data) {
+        var bySlot = {};
+        for (var i = 0; i < data.length; i++) {
+            var b = data[i];
+            var o = b.order;
+            if (o < 1 || o > 9) continue;
+            if (!bySlot[o]) bySlot[o] = [];
+            bySlot[o].push(b);
+        }
+        var lineup = [];
+        for (var slot = 1; slot <= 9; slot++) {
+            var group = bySlot[slot];
+            if (!group || !group.length) continue;
+            var nonPR = group.filter(function(b) { return !_isPinchRunnerPos(b.pos); });
+            var pool = nonPR.length ? nonPR : group;
+            var ph = null;
+            for (var j = 0; j < pool.length; j++) {
+                if (_isPinchHitterPos(pool[j].pos)) ph = pool[j];
+            }
+            var pick;
+            if (ph) pick = ph;
+            else {
+                var starters = pool.filter(function(b) { return b.isStarter; });
+                pick = starters.length ? starters[0] : pool[0];
+            }
+            lineup.push(pick);
+        }
+        return lineup;
+    }
+
     function updateFieldDisplay() {
         var def = currentHalf === 'top' ? homeDefense : visDefense;
         // Fielders — update anchor text content directly
@@ -1257,15 +1305,14 @@
             var name = def[pos] || '';
             el.textContent = name ? _fieldLabel(POS_NUM[pos], name) : '';
         }
-        // Current batter — update offensive anchor
+        // Current batter — same 9-slot line as play entry / sidebar (excludes PR-only rows)
         var battingData = currentHalf === 'top' ? vBattingData : hBattingData;
-        var lineup = battingData.filter(function(b) { return b.isStarter; });
-        lineup.sort(function(a, b) { return a.order - b.order; });
+        var lineup = _battingOrderLineup(battingData);
         var batter = lineup[batterIdx[currentHalf]] || lineup[0] || null;
         var batterAnchor = document.getElementById('field-batter-anchor');
         if (batterAnchor) {
             batterAnchor.textContent = batter ? _runnerLabel(batter.order, batter.name) : '';
-            // Orange highlight for current batter (Gameday Stats a.selected style)
+            // Orange highlight for current batter (Gameday LiveStats a.selected style)
             batterAnchor.classList.toggle('selected', !!batter);
         }
         // Update batter / pitcher name in data entry panel
@@ -1321,7 +1368,7 @@
 
     function updateBattingLineup() {
         var data = currentHalf === "top" ? vBattingData : hBattingData;
-        var lineup = _sortedLineup(data);
+        var lineup = _battingOrderLineup(data);
         var ul = document.getElementById('batting-lineup');
         if (!ul) return;
         var html = '';
@@ -1336,11 +1383,6 @@
                     '</li>';
         }
         ul.innerHTML = html;
-    }
-
-    function _sortedLineup(data) {
-        return data.filter(function(b) { return b.order > 0 && b.order <= 9; })
-                   .sort(function(a, b) { return a.order - b.order; });
     }
 
     function selectBatter(idx) {
@@ -2157,7 +2199,7 @@
 
     function deAction(type) {
         outsRecorded = true;
-        var lineup = _sortedLineup(currentHalf === 'top' ? vBattingData : hBattingData);
+        var lineup = _battingOrderLineup(currentHalf === 'top' ? vBattingData : hBattingData);
         var pitchers = currentHalf === 'top' ? hPitchingData : vPitchingData;
         var batter   = lineup[batterIdx[currentHalf]] || null;
         var pitcher  = pitchers.length ? pitchers[pitchers.length - 1] : null;
@@ -2384,7 +2426,7 @@
         // Dropped foul (E* DF) does NOT change the batter — same batter stays up
         var isDroppedFoul = (action || '').toUpperCase().indexOf('DF') !== -1;
         if (pa.isPA && !pa.isRunnerOnly && !isDroppedFoul) {
-            var lineup = _sortedLineup(currentHalf === 'top' ? vBattingData : hBattingData);
+            var lineup = _battingOrderLineup(currentHalf === 'top' ? vBattingData : hBattingData);
             if (lineup.length > 0) {
                 // Optimistic local stat update so lineup table reflects new ab/h
                 if (batter) _updateLocalBatterStats(batter, type, rbi);

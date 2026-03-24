@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Gameday Stats{% endblock %}</title>
+    <title>{% block title %}Gameday LiveStats{% endblock %}</title>
     <link rel="icon" type="image/png" href="/static/favicon.png" sizes="512x512">
     <style>
         :root {
@@ -441,7 +441,7 @@
                 <a href="#" onclick="event.preventDefault(); toggleDropdown('help-dropdown');">Help</a>
                 <div id="help-dropdown" class="dropdown-menu">
                     <button onclick="closeAllDropdowns(); alert('Users Manual - Coming soon.');"><span class="checkmark-space"></span>View Users Manual</button>
-                    <button onclick="closeAllDropdowns(); alert('Gameday Stats\nVersion 1.0');"><span class="checkmark-space"></span>About Gameday Stats</button>
+                    <button onclick="closeAllDropdowns(); alert('Gameday LiveStats\nVersion 1.0');"><span class="checkmark-space"></span>About Gameday LiveStats</button>
                 </div>
             </div>
         </div>
@@ -457,7 +457,7 @@
         {% block content %}{% endblock %}
     </div>
 
-    <footer>Gameday Stats</footer>
+    <footer>Gameday LiveStats</footer>
 
     <script>
         // ── Dropdown menu ────────────────────────────────────────────────

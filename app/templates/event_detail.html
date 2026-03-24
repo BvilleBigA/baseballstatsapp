@@ -85,7 +85,7 @@
     <br>
     <div>
     {% if season %}
-        <a class="stat-button" href="/action/stats/statsentry/statGame.jsp?t={{ now_ms() }}&amp;season_id={{ season.id }}&amp;event_id={{ game.id }}&amp;sport_code={{ season.sport_id }}&amp;event_date={{ game.date | event_date }}" target="_blank"{% if has_boxscore %} onclick="return confirm('Stats have been entered for this event. If you click OK and save, you will overwrite the existing stats.');"{% endif %}>Launch Gameday Stats</a>
+        <a class="stat-button" href="/action/stats/statsentry/statGame.jsp?t={{ now_ms() }}&amp;season_id={{ season.id }}&amp;event_id={{ game.id }}&amp;sport_code={{ season.sport_id }}&amp;event_date={{ game.date | event_date }}" target="_blank"{% if has_boxscore %} onclick="return confirm('Stats have been entered for this event. If you click OK and save, you will overwrite the existing stats.');"{% endif %}>Launch Gameday LiveStats</a>
     {% endif %}
     </div>
 

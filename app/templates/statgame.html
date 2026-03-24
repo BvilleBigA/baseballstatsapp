@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Gameday Stats Entry</title>
+<title>Gameday LiveStats Entry</title>
 <link rel="icon" type="image/png" href="/static/favicon.png" sizes="512x512">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="viewport" content="768px, maximum-scale=1" />
@@ -146,7 +146,7 @@
 </head>
 
 <style>
-    /* Override GWT-rendered Gameday Stats logo */
+    /* Override GWT-rendered Gameday LiveStats logo */
     #logo {
         content: url('/static/images/gameday-stats-logo-white.png');
     }
@@ -160,8 +160,8 @@
             var el = document.getElementById('logo');
             if (el) {
                 el.src = '/static/images/gameday-stats-logo-white.png';
-                el.alt = 'Gameday Stats';
-                el.title = 'Gameday Stats';
+                el.alt = 'Gameday LiveStats';
+                el.title = 'Gameday LiveStats';
                 clearInterval(timer);
             }
             if (++attempts > 200) clearInterval(timer);

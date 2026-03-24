@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-    <title>{% block page_title %}Gameday Stats{% endblock %}</title>
+    <title>{% block page_title %}Gameday LiveStats{% endblock %}</title>
     <link rel="icon" type="image/png" href="/static/favicon.png" sizes="512x512">
 
     <script type="text/javascript" src="/admin/team/gameday3/vendor/jquery-1.12.1.min.js"></script>
@@ -310,7 +310,7 @@
             {% endblock %}
             <div class="logo-container col-xs-8 col-sm-10 col-md-10 col-lg-10">
                 <a class="logo" href="{% if current_user is defined and current_user %}/admin/team/gameday3/{% else %}/login{% endif %}">
-                    <img src="/static/images/gameday-stats-logo-white.png" border="0" alt="Gameday Stats">
+                    <img src="/static/images/gameday-stats-logo-white.png" border="0" alt="Gameday LiveStats">
                 </a>
             </div>
             <div class="col-xs-2">
@@ -389,7 +389,7 @@
                 </div>
 
                 <div class="footer">
-                    <p>&copy; 2026 Gameday Stats</p>
+                    <p>&copy; 2026 Gameday LiveStats</p>
                 </div>
             </div><!-- /.wrapper -->
         </div><!-- /.main-area -->
