@@ -21,9 +21,10 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.models import Game, Team, User
 from app.routes import (
+    _permitted_seasons,
     _user_has_season_permission,
     _user_has_team_permission,
-    _permitted_seasons,
+    statcrew_sport_display_name,
 )
 from app.xmlapi import build_bsgame_xml
 
@@ -135,12 +136,14 @@ def _team_payload(team):
     # Missing nested season crashes the renderer with a blank screen.
     season_obj = getattr(team, "season", None)
     season_name = (season_obj.name or "") if season_obj else ""
-    sport_id = str(season_obj.sport_id) if season_obj and season_obj.sport_id is not None else "1"
+    sport_num = season_obj.sport_id if season_obj and season_obj.sport_id is not None else 1
     return {
         "teamName": team.name or "",
         "logo": _team_logo_url(team) or "",
         "season": {"seasonName": season_name},
-        "sportId": sport_id,
+        # UI shows this string in the Sport column (was raw statcrew int).
+        "sportId": statcrew_sport_display_name(sport_num),
+        "statcrewSportId": str(sport_num),
     }
 
 

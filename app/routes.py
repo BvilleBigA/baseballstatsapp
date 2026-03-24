@@ -1175,6 +1175,27 @@ SPORT_GROUPS = [
 ]
 
 
+def _statcrew_id_display_names():
+    """One label per stats-engine sport int (first occurrence in SPORT_CODES order)."""
+    m = {}
+    for _code, (sid, label) in SPORT_CODES.items():
+        if sid not in m:
+            m[sid] = label
+    return m
+
+
+STATCREW_SPORT_DISPLAY_NAMES = _statcrew_id_display_names()
+
+
+def statcrew_sport_display_name(sport_id):
+    """Human-readable sport name for a season/game statcrew sport_id (int or numeric str)."""
+    try:
+        sid = int(sport_id)
+    except (TypeError, ValueError):
+        return str(sport_id)
+    return STATCREW_SPORT_DISPLAY_NAMES.get(sid, str(sid))
+
+
 def _sport_int(code):
     """Return the stats-engine integer for a sport code string."""
     return SPORT_CODES.get(code, (1, ''))[0]
