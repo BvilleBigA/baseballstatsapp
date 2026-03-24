@@ -523,15 +523,76 @@ def _gwt_status_line_dict(game):
         t = str(v).strip()
         return t or None
 
+    # Batter/Pitcher name resolution from roster if missing in eventInfo
+    batter_name = _s(ei.get('batter'))
+    pitcher_name = _s(ei.get('pitcher'))
+
+    current_batter_idx = ei.get('currentBatterIndex')
+    if not isinstance(current_batter_idx, list) or len(current_batter_idx) < 2:
+        current_batter_idx = [0, 0]
+
+    vup = _to_int(current_batter_idx[0], 0) + 1
+    hup = _to_int(current_batter_idx[1], 0) + 1
+
+    # If names are missing, try to resolve from currentBattingOrder and players list
+    teams = bs.get('teams', [])
+    if len(teams) >= 2:
+        vis_team_blob = teams[0]
+        home_team_blob = teams[1]
+
+        def _find_name_by_uni(team_blob, uni):
+            if not uni: return None
+            uni_str = str(uni).strip()
+            for p in team_blob.get('players', []):
+                if str(p.get('uniform', '')).strip() == uni_str:
+                    return p.get('completeName') or p.get('lastName') or ''
+            return None
+
+        # Resolve batter if missing
+        if not batter_name:
+            off_team = home_team_blob if is_home_off else vis_team_blob
+            off_idx = 1 if is_home_off else 0
+            cbo = off_team.get('currentBattingOrder', [])
+            b_idx = current_batter_idx[off_idx]
+            if isinstance(cbo, list) and 0 <= b_idx < len(cbo):
+                batter_uni = cbo[b_idx]
+                batter_name = _find_name_by_uni(off_team, batter_uni)
+
+        # Resolve pitcher if missing
+        if not pitcher_name:
+            def_team = vis_team_blob if is_home_off else home_team_blob
+            
+            # 1. Try players with playedPosition == 1 (current pitcher in GWT state)
+            for p in def_team.get('players', []):
+                if p.get('playedPosition') == 1:
+                    pitcher_name = p.get('completeName') or p.get('lastName') or ''
+                    break
+            
+            # 2. Try the latest play if still missing
+            if not pitcher_name and last_play:
+                p_uni_list = last_play.get('playersProp', {}).get('PITCHER', [])
+                if p_uni_list:
+                    p_uni = p_uni_list[0]
+                    pitcher_name = _find_name_by_uni(def_team, p_uni)
+            
+            # 3. Fallback to starterPosition == 1 or first player marked as pitcher
+            if not pitcher_name:
+                for p in def_team.get('players', []):
+                    if str(p.get('pos', '')).lower() == 'p' or p.get('starterPosition') == 1:
+                        pitcher_name = p.get('completeName') or p.get('lastName') or ''
+                        break
+
     return {
         'inning': inning,
         'vh': vh,
         'outs': outs,
+        'vup': vup,
+        'hup': hup,
         'b': b_int,
         's': s_int,
         'np': np_int,
-        'batter': _s(ei.get('batter')),
-        'pitcher': _s(ei.get('pitcher')),
+        'batter': batter_name,
+        'pitcher': pitcher_name,
         'first': _s(ei.get('first')),
         'second': _s(ei.get('second')),
         'third': _s(ei.get('third')),
@@ -3785,6 +3846,10 @@ def build_bsgame_xml(game):
         status.set('first', st_first or '')
         status.set('second', st_second or '')
         status.set('third', st_third or '')
+        if gwt_line and gwt_line.get('vup'):
+            vup_val = gwt_line['vup']
+        if gwt_line and gwt_line.get('hup'):
+            hup_val = gwt_line['hup']
         status.set('vup', str(vup_val))
         status.set('hup', str(hup_val))
         status.set('b', b_str)
@@ -3843,8 +3908,10 @@ def build_bsgame_xml(game):
         status.set('first', f1)
         status.set('second', f2)
         status.set('third', f3)
-        status.set('vup', '1')
-        status.set('hup', '1')
+        vup_pre = gwt_pre.get('vup', '1') if gwt_pre else '1'
+        hup_pre = gwt_pre.get('hup', '1') if gwt_pre else '1'
+        status.set('vup', str(vup_pre))
+        status.set('hup', str(hup_pre))
         status.set('b', b_str)
         status.set('s', s_str)
         status.set('np', np_str)
