@@ -243,21 +243,18 @@ class Game(db.Model):
 
     @property
     def season(self):
-        """Resolve Season via visitor or home team (Game has no direct season FK)."""
-        if self.visitor_team and getattr(self.visitor_team, "season", None):
+        """Resolve Season from visitor or home team (Game has no direct FK to season)."""
+        if self.visitor_team and self.visitor_team.season_id:
             return self.visitor_team.season
-        if self.home_team and getattr(self.home_team, "season", None):
+        if self.home_team and self.home_team.season_id:
             return self.home_team.season
         return None
 
     @property
     def sport_id(self):
-        """Integer stats-engine sport id (0=Football, 1=Baseball, 11=Softball, ...). Defaults to 1.
-        Note: 0 is a valid sport_id (Football), so we cannot use ``or 1`` to coerce."""
+        """Sport identifier from the game's season; defaults to 1 (Baseball) when unknown."""
         s = self.season
-        if s is None or s.sport_id is None:
-            return 1
-        return int(s.sport_id)
+        return s.sport_id if s and s.sport_id is not None else 1
 
     @property
     def status_label(self):
@@ -267,11 +264,14 @@ class Game(db.Model):
                 return f"{n}th"
             return f"{n}" + {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
 
-        sport_id = self.season.sport_id if self.season else 1
+        sport_id = self.sport_id
         is_diamond = sport_id in (1, 11)  # 1=Baseball, 11=Softball
 
+        vr = self.visitor_runs or 0
+        hr = self.home_runs or 0
+
         if self.is_complete:
-            return f"{self.visitor_runs}-{self.home_runs} Final"
+            return f"{vr}-{hr} Final"
 
         if is_diamond and self.innings:
             inning_map = {i.inning: i for i in self.innings}
@@ -282,14 +282,21 @@ class Game(db.Model):
                 h = int(last.home_score or 0)
             except (TypeError, ValueError):
                 v, h = 0, 0
-            vr = self.visitor_runs or 0
-            hr = self.home_runs or 0
             if v > 0 and h == 0:
                 return f"{vr}-{hr} Bot of {_ord(last_num)}"
             return f"{vr}-{hr} Top of {_ord(last_num + 1)}"
 
+        # Non-diamond sports: use innings table as period scores (quarters/halves)
+        if not is_diamond and self.innings:
+            played = max(i.inning for i in self.innings)
+            if sport_id == 0:
+                return f"{vr}-{hr} {_ord(played)} Quarter"
+            if sport_id == 2:
+                return f"{vr}-{hr} {_ord(played)}"
+            return f"{vr}-{hr} {_ord(played)} Period"
+
         if self.batting_stats:
-            return f"{self.visitor_runs or 0}-{self.home_runs or 0} In Progress"
+            return f"{vr}-{hr} In Progress"
 
         if self.has_lineup:
             if is_diamond:

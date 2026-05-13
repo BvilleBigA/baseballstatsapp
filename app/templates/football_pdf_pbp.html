@@ -1,0 +1,102 @@
+{# Per-quarter Play-by-Play summary. The blob's `playSummary` is True/False (a
+   flag), so we fall back to a high-signal recap derived from drives + scoring. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ data.visitor.short }} vs. {{ data.home.short }} — Q{{ qtr }} PBP</title>
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; font-size:11px; color:#222; margin:14px; background:#fff; }
+  h1 { font-size:14px; margin:0 0 2px; text-align:center; }
+  p.sub { text-align:center; color:#555; font-size:10px; margin:0 0 8px; }
+
+  .print-bar { text-align:center; margin-bottom:10px; }
+  .print-bar button { padding:4px 14px; background:#333; color:#fff; border:none; cursor:pointer; font-size:11px; border-radius:3px; }
+  .print-bar a { margin-left:8px; font-size:10px; }
+
+  table.pbp { width:100%; border-collapse:collapse; font-size:11px; margin-top:8px; }
+  table.pbp th { background:#444; color:#fff; padding:4px 6px; text-align:left; font-size:10px; text-transform:uppercase; }
+  table.pbp td { padding:3px 6px; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+  table.pbp .when { width:60px; color:#777; font-variant-numeric:tabular-nums; }
+  table.pbp .drv td { background:#f7f7f7; font-weight:600; }
+  table.pbp .drv-end td { color:#555; font-style:italic; }
+
+  ul.qtr-nav { list-style:none; padding:0; margin:0 0 8px; text-align:center; }
+  ul.qtr-nav li { display:inline; margin:0 4px; }
+  ul.qtr-nav li a { padding:3px 9px; border:1px solid #ccc; border-radius:3px; text-decoration:none; color:#333; font-size:11px; }
+  ul.qtr-nav li.active a { background:#333; color:#fff; border-color:#333; }
+
+  @media print { .print-bar, ul.qtr-nav { display:none; } body { margin:8px; } }
+</style>
+</head>
+<body>
+
+<div class="print-bar">
+  <button onclick="window.print()">Print / Save as PDF</button>
+  <a href="?style=full">Full version</a>
+  <a href="?style=summary">Summary</a>
+</div>
+
+<h1>Play-by-Play Summary &mdash; {{ ['1st','2nd','3rd','4th','OT'][qtr-1 if qtr<=5 else 4] }} Quarter</h1>
+<p class="sub">{{ data.visitor.short or data.visitor.name }} vs. {{ data.home.short or data.home.name }}
+  &mdash; {{ data.date }}{% if data.location %} at {{ data.location }}{% endif %}</p>
+
+<ul class="qtr-nav">
+  {% for n in range(1, data.nperiods + 1) %}
+  <li class="{% if n == qtr %}active{% endif %}"><a href="?style=pbp&amp;qtr={{ n }}">Q{{ n }}</a></li>
+  {% endfor %}
+</ul>
+
+<table class="pbp">
+  <thead>
+    <tr><th class="when">Time</th><th>Play / Drive</th></tr>
+  </thead>
+  <tbody>
+    {% set has_rows = namespace(v=false) %}
+    {% for d in data.drives if d.start_qtr <= qtr and d.end_qtr >= qtr %}
+      {% set has_rows.v = true %}
+      <tr class="drv">
+        <td class="when">{{ "%02d:%02d"|format((d.start_secs // 60), (d.start_secs % 60)) }}</td>
+        <td>
+          Drive #{{ d.idx }} &mdash; starts at spot {{ d.start_spot }}
+          ({{ d.start_how }}), {{ d.plays }} plays{% if d.red_zone %}, red zone{% endif %}
+        </td>
+      </tr>
+      {% for sc in data.scoring if sc.qtr == qtr and sc.drive_idx == d.idx %}
+      <tr>
+        <td class="when">{{ sc.clock }}</td>
+        <td>
+          <strong>{{ sc.team_name }}</strong> &mdash;
+          {% if sc.type == 'TD' %}
+            {% if sc.scorer %}{{ sc.scorer }}{% endif %}
+            {% if sc.how == 'PASS' and sc.passer %}, {{ sc.passer }} pass for {{ sc.yards }} yards{% endif %}
+            {% if sc.how == 'RUSH' %}, {{ sc.yards }} yd run{% endif %}
+            {% if sc.how == 'FUMB' %}, {{ sc.yards }} yd fumble return{% endif %}
+            {% if sc.how == 'INT' %}, {{ sc.yards }} yd interception return{% endif %}
+            , <strong>TOUCHDOWN</strong>
+            {% if sc.pat_by %}({{ sc.pat_by }} {{ (sc.pat_type or 'kick')|lower }} {{ (sc.pat_res or 'good')|lower }}){% endif %}
+          {% elif sc.type == 'FG' %}
+            {{ sc.scorer }} {{ sc.yards }} yd <strong>field goal</strong>
+          {% elif sc.type == 'SAF' %}
+            <strong>Safety</strong>
+          {% endif %}
+          (Score: {{ sc.v_score }} - {{ sc.h_score }})
+        </td>
+      </tr>
+      {% endfor %}
+      <tr class="drv-end">
+        <td class="when">{{ "%02d:%02d"|format((d.end_secs // 60), (d.end_secs % 60)) }}</td>
+        <td>
+          Drive ends ({{ d.end_how }}) at spot {{ d.end_spot }} &mdash;
+          {{ d.plays }} plays, {{ d.yards }} yards in {{ d.top }}
+        </td>
+      </tr>
+    {% endfor %}
+    {% if not has_rows.v %}
+    <tr><td colspan="2" style="color:#aaa;text-align:center;padding:20px;">No drives recorded for this quarter yet.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+
+</body>
+</html>

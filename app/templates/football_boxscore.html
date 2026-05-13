@@ -1,0 +1,127 @@
+{% extends "team.html" %}
+{% import "_football_macros.html" as fb %}
+
+{% block title %}Football Boxscore — {{ data.visitor.short or data.visitor.name }} vs. {{ data.home.short or data.home.name }}{% endblock %}
+
+{% block head_extra %}
+<style>
+.fb-boxscore { max-width: 1100px; margin: 0 auto; font-family: 'Open Sans', sans-serif; }
+.fb-boxscore .head { background:#1a1a2e; color:#fff; padding:14px 20px 12px; border-radius:4px 4px 0 0; }
+.fb-boxscore .head h1 { font-size:16px; margin:0 0 10px; font-weight:400; color:#ccc; }
+.fb-boxscore .teams { display:flex; align-items:center; gap:24px; }
+.fb-boxscore .team { display:flex; align-items:center; gap:10px; }
+.fb-boxscore .team-name  { font-size:20px; font-weight:600; color:#fff; }
+.fb-boxscore .team-score { font-size:42px; line-height:1; padding:0 6px; }
+.fb-boxscore .team-record { font-size:12px; color:#aaa; }
+.fb-boxscore .team.loser .team-score { color:#aaa; }
+.fb-boxscore .team.winner .team-score { color:#fff; font-weight:700; }
+.fb-boxscore .vs { font-size:18px; color:#666; }
+.fb-boxscore .status-badge { display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;margin-left:12px;vertical-align:middle;}
+.fb-boxscore .status-badge.final { background:#2e7d32; color:#fff; }
+.fb-boxscore .status-badge.inprog { background:#e65100; color:#fff; }
+.fb-boxscore .status-badge.sched { background:#1565c0; color:#fff; }
+
+.fb-boxscore .body-section { background:#fff; padding:14px 20px; border-bottom:1px solid #eee; }
+.fb-boxscore .body-section h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:#333; margin:0 0 8px; border-bottom:2px solid #1a1a2e; padding-bottom:4px; }
+
+.fb-boxscore table { width:100%; border-collapse:collapse; font-size:13px; }
+.fb-boxscore table.linescore th, .fb-boxscore table.linescore td { text-align:center; padding:6px 8px; }
+.fb-boxscore table.linescore th.text, .fb-boxscore table.linescore td.text { text-align:left; min-width:160px; }
+.fb-boxscore table.linescore thead th { background:#f5f5f5; color:#555; font-weight:600; font-size:11px; text-transform:uppercase; }
+.fb-boxscore table.linescore .total { font-weight:700; background:#f0f0f0; }
+.fb-boxscore table.linescore tr.winner td, .fb-boxscore table.linescore tr.winner th { font-weight:700; }
+
+.fb-boxscore table.team-stats th, .fb-boxscore table.team-stats td { padding:5px 8px; border-bottom:1px solid #eee; }
+.fb-boxscore table.team-stats th { background:#f5f5f5; font-size:11px; text-transform:uppercase; color:#666; }
+.fb-boxscore table.team-stats td:nth-child(1), .fb-boxscore table.team-stats td:nth-child(3) { width:25%; text-align:center; font-weight:600; }
+.fb-boxscore table.team-stats td:nth-child(2) { text-align:center; color:#555; font-size:12px; }
+
+.fb-boxscore table.scoring th, .fb-boxscore table.scoring td { padding:6px 10px; border-bottom:1px solid #eee; font-size:13px; }
+.fb-boxscore table.scoring thead th { background:#f5f5f5; text-transform:uppercase; font-size:11px; color:#666; }
+
+.fb-boxscore table.ind { margin-bottom:10px; font-size:12px; }
+.fb-boxscore table.ind caption { text-align:left; font-size:12px; font-weight:700; margin:8px 0 4px; color:#444; text-transform:uppercase; }
+.fb-boxscore table.ind th, .fb-boxscore table.ind td { padding:4px 6px; text-align:center; border-bottom:1px solid #f0f0f0; }
+.fb-boxscore table.ind th { background:#fafafa; color:#666; font-size:11px; }
+.fb-boxscore table.ind th.text, .fb-boxscore table.ind td.text { text-align:left; }
+
+.fb-boxscore .team-cols { display:flex; gap:20px; }
+.fb-boxscore .team-cols > div { flex:1; min-width:0; }
+@media (max-width:760px) {
+  .fb-boxscore .team-cols { flex-direction:column; }
+  .fb-boxscore .team-score { font-size:28px; }
+}
+
+.fb-boxscore .actions { padding:12px 20px; background:#f9f9f9; border-top:1px solid #eee; font-size:13px; }
+.fb-boxscore .actions a { margin-right:14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fb-boxscore">
+
+  <div class="head">
+    <h1>
+      <span>{{ data.date }}</span>
+      {% if data.location %}&bull; {{ data.location }}{% endif %}
+      {% if data.status_label %}
+        {% if data.is_complete %}
+          <span class="status-badge final">{{ data.status_label }}</span>
+        {% else %}
+          <span class="status-badge inprog">{{ data.status_label }}</span>
+        {% endif %}
+      {% endif %}
+    </h1>
+    <div class="teams">
+      <div class="team {% if data.visitor_score > data.home_score %}winner{% else %}loser{% endif %}">
+        <div>
+          <div class="team-name">{{ data.visitor.short or data.visitor.name }}</div>
+          <div class="team-record">{{ data.visitor.record }}</div>
+        </div>
+        <div class="team-score">{{ data.visitor_score }}</div>
+      </div>
+      <div class="vs">vs.</div>
+      <div class="team {% if data.home_score > data.visitor_score %}winner{% else %}loser{% endif %}">
+        <div class="team-score">{{ data.home_score }}</div>
+        <div>
+          <div class="team-name">{{ data.home.short or data.home.name }}</div>
+          <div class="team-record">{{ data.home.record }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="body-section">
+    <h2>Linescore</h2>
+    {{ fb.linescore_table(data) }}
+  </div>
+
+  {% if data.scoring %}
+  <div class="body-section">
+    <h2>Scoring Summary</h2>
+    {{ fb.scoring_summary(data) }}
+  </div>
+  {% endif %}
+
+  <div class="body-section">
+    <h2>Team Statistics</h2>
+    {{ fb.team_statistics(data) }}
+  </div>
+
+  <div class="body-section">
+    <h2>Individual Statistics</h2>
+    <div class="team-cols">
+      <div>{{ fb.individual_stats(data.visitor, 'Visitor') }} {{ fb.fumbles_block(data.visitor) }}</div>
+      <div>{{ fb.individual_stats(data.home, 'Home') }} {{ fb.fumbles_block(data.home) }}</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <a href="/game/{{ game.id }}/boxscore.xml" target="_blank">XML</a>
+    <a href="/game/{{ game.id }}/boxscore.pdf?style=full" target="_blank">PDF (Full)</a>
+    <a href="/game/{{ game.id }}/boxscore.pdf?style=summary" target="_blank">PDF (Summary)</a>
+    <a href="/game/{{ game.id }}/boxscore.pdf?style=pbp&qtr=1" target="_blank">PDF (PBP)</a>
+    <a href="/game/{{ game.id }}/statboxscore.json">JSON</a>
+  </div>
+</div>
+{% endblock %}

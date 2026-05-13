@@ -3930,14 +3930,10 @@ def build_bsgame_xml(game):
 def game_boxscore_xml(event_id):
     game = Game.query.get_or_404(event_id)
 
-    from app.sports import get_plugin_for
-    plugin = get_plugin_for(game)
-    try:
-        xml_str = plugin.build_xml(game)
-    except Exception:
-        # Fall back to the legacy diamond builder so a broken plugin never
-        # leaves the user without a download.
-        xml_str = build_bsgame_xml(game)
+    # Dispatch by sport: baseball/softball use the legacy bsgame builder,
+    # football uses its own Presto-format <fbgame> builder, etc.
+    from app.sports import get_sport_for_game
+    xml_str  = get_sport_for_game(game).build_xml(game)
     filename = f"boxscore_{(game.date or 'nodate').replace('-', '')}_{event_id}.xml"
 
     force_dl = request.args.get('download', '0') == '1'
@@ -3959,12 +3955,9 @@ def write_livestats_xml(game):
     if not game or not getattr(game, 'has_lineup', False):
         return
     try:
-        from app.sports import get_plugin_for
+        from app.sports import get_sport_for_game
         os.makedirs(LIVESTATS_XML_DIR, exist_ok=True)
-        try:
-            xml_str = get_plugin_for(game).build_xml(game)
-        except Exception:
-            xml_str = build_bsgame_xml(game)
+        xml_str = get_sport_for_game(game).build_xml(game)
         path = os.path.join(LIVESTATS_XML_DIR, f'game_{game.id}.xml')
         with open(path, 'w', encoding='utf-8') as f:
             f.write(xml_str)
@@ -3982,14 +3975,11 @@ def livestats_export():
     games = Game.query.filter(
         (Game.has_lineup == True) | Game.plays.any() | Game.innings.any()
     ).distinct().all() if hasattr(Game, 'plays') else Game.query.filter(Game.has_lineup == True).all()
-    from app.sports import get_plugin_for
+    from app.sports import get_sport_for_game
     count = 0
     for g in games:
         try:
-            try:
-                xml_str = get_plugin_for(g).build_xml(g)
-            except Exception:
-                xml_str = build_bsgame_xml(g)
+            xml_str = get_sport_for_game(g).build_xml(g)
             path = os.path.join(LIVESTATS_XML_DIR, f'game_{g.id}.xml')
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(xml_str)
@@ -4004,12 +3994,9 @@ def livestats_game_xml(game_id):
     """Serve XML from livestats folder. Point team website at this URL for testing."""
     path = os.path.join(LIVESTATS_XML_DIR, f'game_{game_id}.xml')
     if not os.path.isfile(path):
-        from app.sports import get_plugin_for
         game = Game.query.get_or_404(game_id)
-        try:
-            xml_str = get_plugin_for(game).build_xml(game)
-        except Exception:
-            xml_str = build_bsgame_xml(game)
+        from app.sports import get_sport_for_game
+        xml_str = get_sport_for_game(game).build_xml(game)
         return Response(xml_str, mimetype='application/xml', headers={
             'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache', 'Expires': '0',
         })

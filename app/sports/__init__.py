@@ -1,56 +1,50 @@
 """
 Sport plugin registry.
 
-Each sport (Football, Baseball, Softball, Basketball, ...) provides a SportPlugin
-that knows how to produce XML, JSON, boxscore data, and HTML/PDF templates from
-a Game model.  The Flask routes dispatch on `Game.sport_id` so adding a new
-sport is a matter of writing one plugin file and registering it here.
+Each sport handler implements `app.sports.base.Sport` and is registered here by
+`sport_id` (the integer used in `Season.sport_id`). The handler centralizes:
 
-Sport_id reference (matches Season.sport_id):
-    0  = Football       (FootballPlugin)
-    1  = Baseball       (DiamondPlugin)
-    2  = Basketball
-    3  = Soccer
-    4  = Volleyball
-    5  = Ice Hockey
-    6  = Lacrosse (M)
-    7  = Tennis
-    9  = Field Hockey
-    10 = Lacrosse (W)
-    11 = Softball       (DiamondPlugin)
-    12 = Water Polo
+  - status_options()       — labels for the GWT status dropdown
+  - boxscore_data(game)    — JSON-friendly dict shared by HTML / JSON / PDF
+  - build_xml(game)        — Presto-format XML payload as a string
+  - render_html(...)       — live in-app boxscore page
+  - render_pdf(...)        — print-friendly HTML used as "Save as PDF"
+  - persist_save(game,bs)  — store the GWT save payload (skips diamond-sport SQL
+                             plumbing for sports that live entirely in gwt_bs_blob)
+
+Adding a new sport: implement Sport in app/sports/<sport>.py and register it
+below with the matching sport_id.
 """
+from app.sports.base import Sport, GenericBlobSport
+from app.sports.baseball import BaseballSport
+from app.sports.football import FootballSport
 
-from app.sports.base import SportPlugin
-from app.sports.baseball import DiamondPlugin
-from app.sports.football import FootballPlugin
-
-
-# ── Registry ──────────────────────────────────────────────────────────────────
-
+# sport_id -> Sport handler. See models.Season.sport_id for the canonical IDs.
 _REGISTRY = {
-    0:  FootballPlugin(),
-    1:  DiamondPlugin(),
-    11: DiamondPlugin(),
+    0:  FootballSport(),
+    1:  BaseballSport(sport_id=1, name='Baseball'),
+    11: BaseballSport(sport_id=11, name='Softball'),
 }
 
-_DIAMOND = _REGISTRY[1]
+# Single fallback handler reused for every sport that hasn't been built out yet.
+# It stores the raw GWT blob, derives the line score, and returns the blob as JSON.
+_FALLBACK = GenericBlobSport()
 
 
-def get_plugin_for(game) -> SportPlugin:
-    """Return the SportPlugin for the given Game, falling back to diamond sports.
-    Note: sport_id 0 is Football, so we cannot ``or 1`` the value."""
-    sid = getattr(game, "sport_id", 1)
-    if sid is None:
+def get_sport(sport_id):
+    """Return the Sport handler for the given sport_id, or a generic fallback."""
+    try:
+        sid = int(sport_id)
+    except (TypeError, ValueError):
         sid = 1
-    return _REGISTRY.get(int(sid), _DIAMOND)
+    return _REGISTRY.get(sid, _FALLBACK)
 
 
-def get_plugin_for_sport_id(sport_id) -> SportPlugin:
-    """Direct lookup by sport_id (defaults to diamond)."""
-    if sport_id is None:
-        sport_id = 1
-    return _REGISTRY.get(int(sport_id), _DIAMOND)
+def get_sport_for_game(game):
+    """Convenience: look up the handler for a Game by its season's sport_id."""
+    if game is None:
+        return _FALLBACK
+    return get_sport(getattr(game, 'sport_id', 1))
 
 
-__all__ = ["SportPlugin", "get_plugin_for", "get_plugin_for_sport_id"]
+__all__ = ['Sport', 'get_sport', 'get_sport_for_game']

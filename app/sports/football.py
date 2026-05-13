@@ -1,1160 +1,1143 @@
 """
-Football sport plugin.
+Football Sport handler (sport_id=0).
 
-Source of truth: the GWT live-stats boxscore blob persisted on
-``Game.gwt_bs_blob`` (the same JSON shape produced by Presto LiveStats).
-The blob contains everything the box-score, scoring summary, drive chart,
-XML export, and PDF report need.
+Everything the GWT app knows about a football game is in `Game.gwt_bs_blob`
+(the JSON payload that mirrors Presto's `boxscore_*.json`). We parse it on
+demand and produce all four output formats:
 
-Outputs:
-    XML  — Presto-style ``<fbgame>`` (matches downloadXML.xml)
-    JSON — the blob, augmented with game-level metadata from the DB
-    HTML — sport-specific boxscore_print_football.html template
+    JSON  — `render_json()`        the blob verbatim (already Presto-shaped)
+    XML   — `build_xml()`          Presto `<fbgame>` v7.16 document
+    HTML  — `render_html()`        live in-app boxscore page
+    PDF   — `render_pdf(style=…)`  one of three print-friendly layouts:
+                style='full'       full multi-page boxscore  (~15 pages)
+                style='summary'    compact 1-2 page boxscore
+                style='pbp'        play-by-play (one quarter at a time, via ?qtr=)
+
+We persist only the blob + a quarter-by-quarter line score (so the schedule
+page can display "35-17 Final"). Per-stat SQL tables aren't needed because
+the blob is the single source of truth.
 """
-
 from __future__ import annotations
 
 import json as _json
 import re
 import xml.etree.ElementTree as ET
-from datetime import date as date_cls
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date as _date
 
-from app.sports.base import SportPlugin
-from app.sports.football_pbp import decode_play
+from flask import render_template, request
+
+from app.sports.base import Sport
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# Map GWT patCode → (pattype, patres) for Presto XML <score>.
+# Codes inferred from the cross-referenced sample XML/JSON pair.
+_PAT_CODE_MAP = {
+    16: ('KICK', 'GOOD'),
+    17: ('KICK', 'MISSED'),
+    18: ('PASS', 'GOOD'),
+    19: ('PASS', 'FAIL'),
+    32: ('RUSH', 'GOOD'),
+    33: ('RUSH', 'FAIL'),
+    34: ('PASS', 'FAIL'),
+    35: ('RCV',  'GOOD'),
+}
 
-def _safe_blob(game) -> Dict[str, Any]:
-    """Parse ``Game.gwt_bs_blob`` into a dict. Returns ``{}`` on failure."""
-    raw = getattr(game, "gwt_bs_blob", "") or ""
+
+# ── small helpers ────────────────────────────────────────────────────────
+
+def _int(v, default=0):
+    try:
+        return int(v) if v not in (None, '', False, True) or v == 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_int(v, default=0):
+    """int() that treats None/blank as default. Accepts strings like '34'."""
+    if v is None:
+        return default
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        try:
+            return int(float(v))
+        except (TypeError, ValueError):
+            return default
+
+
+def _div(numer, denom, digits=1):
+    if not denom:
+        return '0.0' if digits else '0'
+    return f'{(numer / denom):.{digits}f}'
+
+
+def _mmss(total_secs):
+    total_secs = max(0, int(total_secs or 0))
+    return f'{total_secs // 60:02d}:{total_secs % 60:02d}'
+
+
+def _date_us(iso):
+    """YYYY-MM-DD → M/D/YYYY (Presto format)."""
+    if not iso:
+        return ''
+    try:
+        y, m, d = iso.split('-')
+        return f'{int(m)}/{int(d)}/{y}'
+    except Exception:
+        return iso
+
+
+def _avg_thousandths(stored):
+    """GWT stores per-attempt averages multiplied by 1000 (rushAvg, receivingAvg).
+       Punt avg is multiplied by 100 in some builds — we autoscale."""
+    if not stored:
+        return 0.0
+    try:
+        v = float(stored)
+    except (TypeError, ValueError):
+        return 0.0
+    if v >= 100:
+        return v / 1000.0
+    return v
+
+
+def _punt_avg(stored):
+    if not stored:
+        return 0.0
+    try:
+        v = float(stored)
+    except (TypeError, ValueError):
+        return 0.0
+    # Sample: 3400 → 34.0; some payloads may already be the actual avg.
+    return v / 100.0 if v >= 1000 else v
+
+
+def _ord(n):
+    n = int(n)
+    if 11 <= (n % 100) <= 13:
+        return f'{n}th'
+    return f'{n}' + {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+
+
+def _qtr_label(n):
+    return {1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: 'OT'}.get(int(n or 0), f'{int(n or 0)}th')
+
+
+# ── blob loader ──────────────────────────────────────────────────────────
+
+def _load_blob(game):
+    """Return the GWT boxscore blob as a dict (never None)."""
+    raw = (game.gwt_bs_blob or '').strip()
     if not raw:
-        return {}
+        return _empty_blob(game)
     try:
         return _json.loads(raw)
     except (ValueError, TypeError):
-        return {}
-
-
-def _team_blob(blob: Dict[str, Any], vh: str) -> Dict[str, Any]:
-    """Return the visitor (``vh='V'``) or home (``vh='H'``) team dict from the blob."""
-    teams = blob.get("teams") or []
-    if not teams:
-        return {}
-    # Convention: first team is visitor, second is home. Cross-check with keyStroke
-    # if available — Presto uses a single-letter key per team.
-    if vh == "V":
-        return teams[0]
-    if len(teams) > 1:
-        return teams[1]
-    return {}
-
-
-def _ext_id(team) -> str:
-    """Stable external team id used in XML (Presto 'STATS1', 'STATS2' style)."""
-    if not team:
-        return ""
-    tid = (team.team_id or team.code or team.abbreviation or f"T{team.id}").strip()
-    return tid or f"T{team.id}"
-
-
-def _venue_date(date_str: str) -> str:
-    """YYYY-MM-DD → M/D/YYYY (or pass-through)."""
-    if not date_str:
-        return ""
-    try:
-        y, m, d = date_str.split("-")
-        return f"{int(m)}/{int(d)}/{y}"
-    except Exception:
-        return date_str
-
-
-def _short_name(full: str, max_len: int = 15) -> str:
-    """Mirror Presto's 'shortname' truncation."""
-    return (full or "")[:max_len]
-
-
-def _checkname(full: str) -> str:
-    """Presto's checkname format: 'LASTNAME,FIRSTNAME' uppercase."""
-    if not full:
-        return ""
-    parts = (full or "").strip().split()
-    if not parts:
-        return ""
-    if len(parts) == 1:
-        return parts[0].upper()
-    return f"{parts[-1].upper()},{' '.join(parts[:-1]).upper()}"
-
-
-def _filtered_attrs(d: Dict[str, Any], keys: List[str]) -> Dict[str, str]:
-    """Pick fields from a player/team dict, dropping zero values to match Presto."""
-    out = {}
-    for k in keys:
-        v = d.get(k)
-        if v is None:
-            continue
-        if isinstance(v, (int, float)) and v == 0:
-            continue
-        out[k] = str(v)
-    return out
-
-
-def _indent(elem: ET.Element, level: int = 0) -> None:
-    """Pretty-print ET tree (in-place)."""
-    indent = "\n" + level * "  "
-    if len(elem):
-        if not elem.text or not elem.text.strip():
-            elem.text = indent + "  "
-        for child in elem:
-            _indent(child, level + 1)
-            if not child.tail or not child.tail.strip():
-                child.tail = indent + "  "
-        if not elem[-1].tail or not elem[-1].tail.strip():
-            elem[-1].tail = indent
-    else:
-        if level and (not elem.tail or not elem.tail.strip()):
-            elem.tail = indent
-
-
-# ── XML stat-block mappings (Presto field names) ─────────────────────────────
-# Each tuple is (xml_attr, json_field). Zero values are dropped.
-
-_TEAM_TOTAL_HEAD = [
-    ("totoff_plays", "totalOffPlays"),
-    ("totoff_yards", "totalOffYards"),
-]
-
-_BLOCKS = {
-    "firstdowns": [
-        ("no", "firstDownNo"), ("rush", "firstDownRush"),
-        ("pass", "firstDownPass"), ("penalty", "firstDownPenalty"),
-    ],
-    "penalties": [("no", "penaltyNo"), ("yds", "penaltyYards")],
-    "conversions": [
-        ("thirdconv", "conversionThirdConv"), ("thirdatt", "conversionThirdAtt"),
-        ("fourthconv", "conversionFourthConv"), ("fourthatt", "conversionFourthAtt"),
-    ],
-    "fumbles": [("no", "fumblesNo"), ("lost", "fumblesLost")],
-    "misc": [("yds", "miscYards")],   # 'top' is computed below
-    "redzone": [
-        ("att", "redZoneTimeInside20"), ("scores", "redZoneTimeScored"),
-        ("points", "redZonePointsScored"), ("tdrush", "redZoneRushingTds"),
-        ("tdpass", "redZonePassingTds"), ("fgmade", "redZoneFgsMade"),
-        ("endfga", "redZoneEndOnFga"), ("enddowns", "redZoneEndOnDowns"),
-        ("endint", "redZoneEndOnIntCpt"), ("endfumb", "redZoneEndOnFumble"),
-        ("endhalf", "redZoneEndOfHalf"), ("endgame", "redZoneEndOfGame"),
-    ],
-    "rush": [
-        ("att", "rushAtt"), ("td", "rushTd"), ("long", "rushLong"),
-        ("loss", "rushWinLoss"), ("yds", "rushYards"),
-    ],
-    "pass": [
-        ("att", "passAtt"), ("td", "passTd"), ("long", "passLong"),
-        ("yds", "passYards"), ("comp", "passComp"),
-        ("sacks", "passSacks"), ("sackyds", "passSackYards"),
-        ("int", "passInt"),
-    ],
-    "rcv": [
-        ("long", "receivingLong"), ("no", "receivingNo"),
-        ("td", "receivingTd"), ("yds", "receivingYards"),
-    ],
-    "punt": [
-        ("avg", "kickPuntAvg"), ("blkd", "kickPuntBlkd"), ("fc", "kickPuntFc"),
-        ("inside20", "kickPuntI20"), ("long", "kickPuntLong"),
-        ("no", "kickPuntNo"), ("plus50", "kickPunt50"),
-        ("tb", "kickPuntTb"), ("yds", "kickPuntYards"),
-    ],
-    "ko": [
-        ("no", "kickKoNo"), ("ob", "kickKoOb"),
-        ("tb", "kickKoTb"), ("yds", "kickKoYards"),
-    ],
-    "fg": [
-        ("att", "kickFgAtt"), ("blkd", "kickFgBlk"),
-        ("long", "kickFgLong"), ("made", "kickFgMad"),
-    ],
-    "pat": [
-        ("kickatt", "epOffKickAt"), ("kickmade", "epOffKickMd"),
-        ("passatt", "epOffPassAt"), ("passmade", "epOffPassMd"),
-        ("rcvmade", "epOffRcvMd"), ("rushatt", "epOffRushAt"),
-        ("rushmade", "epOffRushMd"),
-        # Defensive PAT returns
-        ("retfatt", "epDefIfAt"), ("retfmade", "epDefRetMad"),
-        ("retkatt", "epDefKickRetAt"), ("retkmade", "epDefKickRetMd"),
-    ],
-    "defense": [
-        ("brup", "defensePassBrUp"), ("ff", "defenseFumbForc"),
-        ("fr", "defenseFumbRcvr"), ("fryds", "returnsFumbYards"),
-        ("qbh", "defenseQbh"),
-        ("sacks", "defenseTotalSack"), ("sackyds", "defenseSackWinLossYards"),
-        ("sacka", "defenseSackA"), ("sacksa", "defenseSackA"),
-        ("sackua", "defenseSackUa"), ("sacksua", "defenseSackUa"),
-        ("tacka", "defenseTackA"), ("tackua", "defenseTackUa"),
-        ("tot_tack", "defenseTackUaA"),
-        ("tfla", "defenseTflA"), ("tflua", "defenseTflUa"),
-        ("tflyds", "defenseTflLossYards"),
-    ],
-    "kr": [
-        ("long", "returnsKickLong"), ("no", "returnsKickNo"),
-        ("td", "returnsKickTd"), ("yds", "returnsKickYards"),
-    ],
-    "pr": [
-        ("long", "returnsPuntLong"), ("no", "returnsPuntNo"),
-        ("td", "returnsPuntTd"), ("yds", "returnsPuntYards"),
-    ],
-    "fr": [
-        ("long", "returnsFumbLong"), ("no", "returnsFumbNo"),
-        ("td", "returnsFumbTd"), ("yds", "returnsFumbYards"),
-    ],
-    "ir": [
-        ("long", "returnsIntLong"), ("no", "returnsIntNo"),
-        ("td", "returnsIntTd"), ("yds", "returnsIntYards"),
-    ],
-}
-
-# Blocks to consider including in a per-player <player> element. Order matters
-# for matching Presto's downloadXML.xml output.
-_PLAYER_BLOCK_ORDER = [
-    "rush", "pass", "rcv", "punt", "ko", "fg", "pat",
-    "defense", "kr", "pr", "fr", "ir", "fumbles",
-]
-
-
-def _has_any_value(player: Dict[str, Any], attr_map: List[Tuple[str, str]]) -> bool:
-    return any(player.get(k) for _, k in attr_map)
-
-
-# XML attributes that represent yards "lost" — Presto stores them as positive
-# magnitudes (loss="10", sackyds="9", tflyds="3"). The GWT blob sometimes
-# carries them as negative deltas. Normalise to positive.
-_ABS_LOSS_ATTRS = {
-    "loss", "sackyds", "tflyds", "fryds",
-    "sackwinloss", "tflwinloss",
-}
-
-
-def _emit_block(parent: ET.Element, tag: str, src: Dict[str, Any], mapping: List[Tuple[str, str]]) -> Optional[ET.Element]:
-    attrs: Dict[str, str] = {}
-    seen = set()
-    for xml_k, json_k in mapping:
-        if xml_k in seen:
-            continue
-        seen.add(xml_k)
-        v = src.get(json_k)
-        if v is None:
-            continue
-        if isinstance(v, float) and v.is_integer():
-            v = int(v)
-        if isinstance(v, (int, float)) and v == 0:
-            continue
-        if xml_k in _ABS_LOSS_ATTRS and isinstance(v, (int, float)):
-            v = abs(v)
-        attrs[xml_k] = str(v)
-    # Recompute averages from no + yds — the GWT-stored value is scaled
-    # inconsistently between team-level and per-player rows.
-    if tag in ("punt", "ko") and "no" in attrs and "yds" in attrs:
-        try:
-            n = int(attrs["no"]); y = int(attrs["yds"])
-            if n:
-                attrs["avg"] = str(round(y / n, 1))
-        except (ValueError, ZeroDivisionError):
-            pass
-    if not attrs:
-        return None
-    el = ET.SubElement(parent, tag)
-    for k, v in attrs.items():
-        el.set(k, v)
-    return el
-
-
-def _format_top(secs: int) -> str:
-    """seconds → mm:ss"""
-    try:
-        s = int(secs or 0)
-    except (TypeError, ValueError):
-        return "00:00"
-    return f"{s // 60:02d}:{s % 60:02d}"
-
-
-# ── Plugin ───────────────────────────────────────────────────────────────────
-
-class FootballPlugin(SportPlugin):
-    sport_id = 0
-    name = "Football"
-    xml_root = "fbgame"
-    boxscore_template = "boxscore_print_football.html"
-    statboxscore_template = "boxscore_print_football.html"
-
-    # ── XML ──────────────────────────────────────────────────────────────────
-    def build_xml(self, game) -> str:
-        blob = _safe_blob(game)
-        d = date_cls.today()
-        root = ET.Element("fbgame")
-        root.set("source", "Gameday LiveStats")
-        root.set("version", "7.16.0")
-        root.set("generated", f"{d.month:02d}/{d.day}/{d.year}")
-
-        vis = game.visitor_team
-        home = game.home_team
-        vis_id = _ext_id(vis)
-        home_id = _ext_id(home)
-        vis_blob = _team_blob(blob, "V")
-        home_blob = _team_blob(blob, "H")
-
-        ev = (blob.get("eventInfo") or {})
-        self._write_venue(root, game, ev, vis, home, vis_id, home_id)
-        self._write_status(root, ev)
-        self._write_team(root, "V", vis, vis_blob, home_blob, vis_id, home_id, blob)
-        self._write_team(root, "H", home, home_blob, vis_blob, vis_id, home_id, blob)
-        self._write_scores(root, ev, vis_blob, home_blob, vis_id, home_id)
-        self._write_fgas(root, ev, vis_blob, home_blob, vis_id, home_id)
-        self._write_drives(root, ev, vis_id, home_id)
-        self._write_plays(root, blob, vis_id, home_id, vis_blob, home_blob)
-
-        _indent(root)
-        body = ET.tostring(root, encoding="unicode")
-        return '<?xml version="1.0" encoding="UTF-8"?>\n\n' + body + "\n"
-
-    # ── JSON ─────────────────────────────────────────────────────────────────
-    def build_json(self, game) -> Dict[str, Any]:
-        """Return the persisted GWT boxscore blob, augmented with DB metadata.
-
-        The blob is the canonical source — returning it verbatim ensures the
-        Presto/GWT clients (and offline tooling) can round-trip cleanly."""
-        blob = _safe_blob(game)
-        if not blob:
-            return {"teams": [], "plays": {}, "eventInfo": {}, "countPeriods": 0, "gamePeriods": 0}
-
-        ev = blob.setdefault("eventInfo", {})
-        ev.setdefault("date", _venue_date(game.date or ""))
-        ev.setdefault("location", game.location or "")
-        ev.setdefault("attendance", game.attendance or 0)
-        ev.setdefault("conference", bool(game.is_league_game))
-        ev.setdefault("neutral", bool(game.is_neutral))
-        ev.setdefault("night", bool(game.is_night))
-        ev.setdefault("exhibition", bool(game.is_exhibition))
-        ev.setdefault("status", "Final" if game.is_complete else "In Progress")
-        ev.setdefault("statusCode", 2 if game.is_complete else 1)
-        ev.setdefault("sportCode", "fb")
-        ev.setdefault("id", game.id)
-        season = getattr(game, "season", None)
-        if season is not None:
-            ev.setdefault("seasonId", season.id)
-        return blob
-
-    # ── Boxscore data (templates) ────────────────────────────────────────────
-    def build_boxscore_data(self, game) -> Dict[str, Any]:
-        blob = _safe_blob(game)
-        vis_blob = _team_blob(blob, "V")
-        home_blob = _team_blob(blob, "H")
-        ev = blob.get("eventInfo") or {}
-
-        vis_name = (vis_blob.get("name") or (game.visitor_team.name if game.visitor_team else "Visitor"))
-        home_name = (home_blob.get("name") or (game.home_team.name if game.home_team else "Home"))
-
-        # Linescore by quarter
-        n_prd = max(int(ev.get("rulesPeriods") or 4),
-                    int(ev.get("statusPeriod") or 0),
-                    len(vis_blob.get("periodstats") or []) or 0,
-                    len(home_blob.get("periodstats") or []) or 0,
-                    4)
-        v_scores = [int((p.get("score") or 0)) for p in (vis_blob.get("periodstats") or [])]
-        h_scores = [int((p.get("score") or 0)) for p in (home_blob.get("periodstats") or [])]
-        while len(v_scores) < n_prd: v_scores.append(0)
-        while len(h_scores) < n_prd: h_scores.append(0)
-
-        linescore = []
-        for i in range(n_prd):
-            linescore.append({"num": i + 1, "v": v_scores[i], "h": h_scores[i]})
-        v_total = sum(v_scores)
-        h_total = sum(h_scores)
-
-        # Team stats rollup for the print template
-        team_summary = self._team_summary(vis_blob, home_blob)
-
-        # Per-team player stat tables
-        vis_players = self._player_tables(vis_blob)
-        home_players = self._player_tables(home_blob)
-
-        # Scoring summary
-        scoring = self.scoring_summary(game)
-
-        # Drive chart
-        drives = self._drive_chart(ev, vis_blob, home_blob)
-
-        data: Dict[str, Any] = {
-            "sport_id": 0,
-            "sport_name": "Football",
-            "visitor_name": vis_name,
-            "home_name": home_name,
-            "visitor_runs": v_total,
-            "home_runs": h_total,
-            "visitor_score": v_total,
-            "home_score": h_total,
-            "visitor_record": vis_blob.get("record") or (game.visitor_record or ""),
-            "home_record": home_blob.get("record") or (game.home_record or ""),
-            "visitor_abbr": vis_blob.get("keyStroke") or (game.visitor_team.abbreviation if game.visitor_team else ""),
-            "home_abbr": home_blob.get("keyStroke") or (game.home_team.abbreviation if game.home_team else ""),
-            "visitor_id": vis_blob.get("abbr") or _ext_id(game.visitor_team),
-            "home_id": home_blob.get("abbr") or _ext_id(game.home_team),
-            "date": _venue_date(game.date or "") or ev.get("date") or "",
-            "start_time": game.start_time or ev.get("timeStart") or "",
-            "location": game.location or ev.get("location") or "",
-            "attendance": ev.get("attendance") or game.attendance or 0,
-            "status_label": game.status_label or "",
-            "linescore": linescore,
-            "team_summary": team_summary,
-            "visitor_players": vis_players,
-            "home_players": home_players,
-            "scoring_summary": scoring,
-            "drives": drives,
-            "officials": (ev.get("referees") or []),
-            "n_periods": n_prd,
-        }
-        return data
-
-    # ── Scoring summary ──────────────────────────────────────────────────────
-    def scoring_summary(self, game) -> List[Dict[str, Any]]:
-        blob = _safe_blob(game)
-        vis_blob = _team_blob(blob, "V")
-        home_blob = _team_blob(blob, "H")
-        ev = blob.get("eventInfo") or {}
-        scoring_raw = ev.get("scoring") or []
-        rows = []
-        for s in scoring_raw:
-            home_team = bool(s.get("homeTeam"))
-            team_blob = home_blob if home_team else vis_blob
-            team_name = team_blob.get("name") or ("Home" if home_team else "Visitor")
-            scorer = self._player_label(team_blob, str(s.get("scorer") or ""))
-            passer = self._player_label(team_blob, str(s.get("passer") or ""))
-            patby  = self._player_label(team_blob, str(s.get("patBy") or ""))
-            how = (s.get("how") or "").upper()
-            stype = (s.get("type") or "").upper()
-            yds = s.get("yards")
-            clock = f"{int(s.get('mins') or 0):02d}:{int(s.get('secs') or 0):02d}"
-            qtr = int(s.get("quarter") or 0)
-            v_score = int(s.get("visitorScore") or 0)
-            h_score = int(s.get("homeScore") or 0)
-
-            if stype == "TD" and how == "PASS":
-                txt = f"{team_name} — {passer} {yds}yd TD pass to {scorer}"
-            elif stype == "TD" and how == "RUSH":
-                txt = f"{team_name} — {scorer} {yds}yd TD run"
-            elif stype == "TD" and how in ("FUMB", "FUMBLE"):
-                txt = f"{team_name} — {scorer} {yds}yd fumble return TD"
-            elif stype == "TD" and how in ("INT", "INTERCEPTION"):
-                txt = f"{team_name} — {scorer} {yds}yd interception return TD"
-            elif stype == "TD":
-                txt = f"{team_name} — {scorer} {yds}yd TD" if yds else f"{team_name} — {scorer} TD"
-            elif stype == "FG":
-                txt = f"{team_name} — {scorer} {yds}yd field goal"
-            elif stype == "SAF":
-                txt = f"{team_name} — Safety"
-            else:
-                txt = f"{team_name} — {scorer} {stype}"
-
-            # Append PAT info when this was a TD with a PAT attempt
-            patres = (s.get("patres") or "").upper()
-            if stype == "TD":
-                # patCode is the GWT internal mapping; fall back to plain "good/no good" lookup
-                pat_kind = self._pat_kind_from_code(s.get("patCode"))
-                if patby:
-                    if patres in ("FAIL", "F", "N", "NG"):
-                        txt += f" — 2pt {pat_kind} by {patby} failed" if pat_kind == "pass" else f" — {patby} kick failed"
-                    elif pat_kind == "pass":
-                        txt += f" — 2pt pass conversion ({patby}) good"
-                    elif pat_kind == "rush":
-                        txt += f" — 2pt rush conversion ({patby}) good"
-                    else:
-                        txt += f" — {patby} kick good"
-
-            rows.append({
-                "prd": qtr,
-                "time": clock,
-                "team": team_name,
-                "team_visitor": not home_team,
-                "scorer": scorer,
-                "passer": passer,
-                "pat_by": patby,
-                "how": how,
-                "type": stype,
-                "yards": yds,
-                "text": txt,
-                "vscore": v_score,
-                "hscore": h_score,
-                "score": f"{v_score} - {h_score}",
-            })
-        return rows
-
-    # ── Play-by-play ─────────────────────────────────────────────────────────
-    def play_by_play(self, game) -> List[Dict[str, Any]]:
-        """Return narrative PBP suitable for the per-quarter summary section."""
-        blob = _safe_blob(game)
-        vis_blob = _team_blob(blob, "V")
-        home_blob = _team_blob(blob, "H")
-        vis_id = vis_blob.get("abbr") or "STATS1"
-        home_id = home_blob.get("abbr") or "STATS2"
-
-        plays_by_period = blob.get("plays") or {}
-        rows: List[Dict[str, Any]] = []
-        for prd_key in sorted(plays_by_period.keys(), key=lambda k: int(k)):
-            for play in plays_by_period[prd_key]:
-                props = play.get("props") or {}
-                raw = props.get("RAW_PLAY") or ""
-                pos_is_home = _possession_is_home(props, play)
-                pos = home_blob if pos_is_home else vis_blob
-                deff = vis_blob if pos_is_home else home_blob
-                text = decode_play(
-                    raw,
-                    possession_team=pos,
-                    defense_team=deff,
-                    vis_id=vis_id, home_id=home_id,
-                    vis_blob=vis_blob, home_blob=home_blob,
-                )
-                if text is None:
-                    text = props.get("COMMENT") or props.get("CMT") or ""
-                if not text:
-                    # Pure marker (drive/quarter/spot); skip so PBP stays clean.
-                    continue
-                rows.append({
-                    "period": int(play.get("period") or prd_key),
-                    "clock": props.get("CLOCK") or "",
-                    "team_v": not pos_is_home,
-                    "text": text,
-                    "vscore": _safe_int(props.get("V_SCORE")),
-                    "hscore": _safe_int(props.get("H_SCORE")),
-                })
-        return rows
-
-    # ── Internal helpers ─────────────────────────────────────────────────────
-
-    def _player_label(self, team_blob: Dict[str, Any], uni: str) -> str:
-        if not uni:
-            return ""
-        for p in team_blob.get("players", []):
-            if str(p.get("uniform") or "") == str(uni):
-                return p.get("completeName") or f"#{uni}"
-        return f"#{uni}"
-
-    def _pat_kind_from_code(self, code: Any) -> str:
-        """Decode the Presto patCode to a human-readable kind.
-
-        16 ≈ Kick (1pt), 17 ≈ Rush (2pt), 18/34 ≈ Pass (2pt). These are the
-        most common; unknown codes fall through to 'kick'."""
-        try:
-            c = int(code) if code is not None else 0
-        except (TypeError, ValueError):
-            c = 0
-        if c == 0:
-            return ""
-        if c in (16,):
-            return "kick"
-        if c in (17,):
-            return "rush"
-        if c in (18, 34):
-            return "pass"
-        return "kick"
-
-    def _team_summary(self, v: Dict[str, Any], h: Dict[str, Any]) -> Dict[str, Any]:
-        def stat(k):
-            return {"v": v.get(k, 0) or 0, "h": h.get(k, 0) or 0}
-        def fmt_rush(side):
-            att = side.get("rushAtt", 0) or 0
-            yds = side.get("rushYards", 0) or 0
-            return f"{att}-{yds}"
-        def fmt_pa(side):
-            att = side.get("passAtt", 0) or 0
-            comp = side.get("passComp", 0) or 0
-            ints = side.get("passInt", 0) or 0
-            return f"{att}-{comp}-{ints}"
-        def fmt_total(side):
-            return f"{side.get('totalOffPlays', 0) or 0}-{side.get('totalOffYards', 0) or 0}"
-        def fmt_punt(side):
-            n = side.get("kickPuntNo", 0) or 0
-            yds = side.get("kickPuntYards", 0) or 0
-            avg = round(yds / n, 1) if n else 0
-            return f"{n}-{avg}"
-        def fmt_pen(side):
-            return f"{side.get('penaltyNo', 0) or 0}-{side.get('penaltyYards', 0) or 0}"
-        def fmt_fum(side):
-            return f"{side.get('fumblesNo', 0) or 0}-{side.get('fumblesLost', 0) or 0}"
-        def fmt_top(side):
-            secs = side.get("miscPossession", 0) or 0
-            try:
-                secs = int(secs)
-            except (TypeError, ValueError):
-                secs = 0
-            return f"{secs // 60}:{secs % 60:02d}"
-        def fmt_pct(num, den):
-            return f"{round((num / den * 100), 1) if den else 0}% ({num} of {den})"
-
-        return {
-            "first_downs": stat("firstDownNo"),
-            "first_downs_rush": stat("firstDownRush"),
-            "first_downs_pass": stat("firstDownPass"),
-            "first_downs_penalty": stat("firstDownPenalty"),
-            "rush_line": {"v": fmt_rush(v), "h": fmt_rush(h)},
-            "pass_yards": stat("passYards"),
-            "pass_line": {"v": fmt_pa(v), "h": fmt_pa(h)},
-            "total_offense": stat("totalOffYards"),
-            "total_offense_line": {"v": fmt_total(v), "h": fmt_total(h)},
-            "fumble_returns": {"v": f"{v.get('returnsFumbNo', 0) or 0}-{v.get('returnsFumbYards', 0) or 0}",
-                               "h": f"{h.get('returnsFumbNo', 0) or 0}-{h.get('returnsFumbYards', 0) or 0}"},
-            "punt_returns": {"v": f"{v.get('returnsPuntNo', 0) or 0}-{v.get('returnsPuntYards', 0) or 0}",
-                             "h": f"{h.get('returnsPuntNo', 0) or 0}-{h.get('returnsPuntYards', 0) or 0}"},
-            "kick_returns": {"v": f"{v.get('returnsKickNo', 0) or 0}-{v.get('returnsKickYards', 0) or 0}",
-                             "h": f"{h.get('returnsKickNo', 0) or 0}-{h.get('returnsKickYards', 0) or 0}"},
-            "int_returns": {"v": f"{v.get('returnsIntNo', 0) or 0}-{v.get('returnsIntYards', 0) or 0}",
-                            "h": f"{h.get('returnsIntNo', 0) or 0}-{h.get('returnsIntYards', 0) or 0}"},
-            "punts": {"v": fmt_punt(v), "h": fmt_punt(h)},
-            "fumbles": {"v": fmt_fum(v), "h": fmt_fum(h)},
-            "penalties": {"v": fmt_pen(v), "h": fmt_pen(h)},
-            "possession": {"v": fmt_top(v), "h": fmt_top(h)},
-            "third_down": {
-                "v": fmt_pct(v.get("conversionThirdConv", 0) or 0, v.get("conversionThirdAtt", 0) or 0),
-                "h": fmt_pct(h.get("conversionThirdConv", 0) or 0, h.get("conversionThirdAtt", 0) or 0),
-            },
-            "fourth_down": {
-                "v": fmt_pct(v.get("conversionFourthConv", 0) or 0, v.get("conversionFourthAtt", 0) or 0),
-                "h": fmt_pct(h.get("conversionFourthConv", 0) or 0, h.get("conversionFourthAtt", 0) or 0),
-            },
-            "red_zone": {
-                "v": f"{v.get('redZoneTimeScored', 0) or 0}-{v.get('redZoneTimeInside20', 0) or 0}",
-                "h": f"{h.get('redZoneTimeScored', 0) or 0}-{h.get('redZoneTimeInside20', 0) or 0}",
-            },
-        }
-
-    def _player_tables(self, team_blob: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
-        """Group per-player stat lines into the sections shown on the box score."""
-        passing, rushing, receiving = [], [], []
-        kicking, punting, ko_team = [], [], []
-        kick_ret, punt_ret, int_ret, fum_ret = [], [], [], []
-        defense, fumbles = [], []
-
-        for p in team_blob.get("players", []):
-            uni = str(p.get("uniform") or "")
-            name = (p.get("completeName") or "").strip()
-            if not name or name == "Team":
-                pass  # include TEAM rows for defense / receiving / etc., skip elsewhere
-            if (p.get("passAtt") or 0) > 0 or (p.get("passComp") or 0) > 0:
-                passing.append({
-                    "uni": uni, "name": name,
-                    "cp": p.get("passComp", 0) or 0,
-                    "att": p.get("passAtt", 0) or 0,
-                    "yds": p.get("passYards", 0) or 0,
-                    "td": p.get("passTd", 0) or 0,
-                    "int": p.get("passInt", 0) or 0,
-                    "long": p.get("passLong", 0) or 0,
-                })
-            if (p.get("rushAtt") or 0) > 0:
-                att = p.get("rushAtt") or 0
-                yds = p.get("rushYards") or 0
-                rushing.append({
-                    "uni": uni, "name": name, "att": att, "yds": yds,
-                    "avg": round(yds / att, 1) if att else 0.0,
-                    "long": p.get("rushLong", 0) or 0,
-                    "td": p.get("rushTd", 0) or 0,
-                })
-            if (p.get("receivingNo") or 0) > 0:
-                no = p.get("receivingNo") or 0
-                yds = p.get("receivingYards") or 0
-                receiving.append({
-                    "uni": uni, "name": name, "no": no, "yds": yds,
-                    "avg": round(yds / no, 1) if no else 0.0,
-                    "long": p.get("receivingLong", 0) or 0,
-                    "td": p.get("receivingTd", 0) or 0,
-                })
-            if (p.get("kickFgAtt") or 0) > 0 or (p.get("epOffKickAt") or 0) > 0:
-                kicking.append({
-                    "uni": uni, "name": name,
-                    "fgm": p.get("kickFgMad", 0) or 0,
-                    "fga": p.get("kickFgAtt", 0) or 0,
-                    "lg": p.get("kickFgLong", 0) or 0,
-                    "xpm": p.get("epOffKickMd", 0) or 0,
-                    "xpa": p.get("epOffKickAt", 0) or 0,
-                    "pts": (3 * (p.get("kickFgMad", 0) or 0)) + (p.get("epOffKickMd", 0) or 0),
-                })
-            if (p.get("kickPuntNo") or 0) > 0:
-                n = p.get("kickPuntNo") or 0
-                yds = p.get("kickPuntYards") or 0
-                punting.append({
-                    "uni": uni, "name": name, "no": n, "yds": yds,
-                    "avg": round(yds / n, 1) if n else 0.0,
-                    "long": p.get("kickPuntLong", 0) or 0,
-                    "tb": p.get("kickPuntTb", 0) or 0,
-                    "in20": p.get("kickPuntI20", 0) or 0,
-                })
-            if (p.get("kickKoNo") or 0) > 0:
-                n = p.get("kickKoNo") or 0
-                yds = p.get("kickKoYards") or 0
-                ko_team.append({
-                    "uni": uni, "name": name, "no": n, "yds": yds,
-                    "avg": round(yds / n, 1) if n else 0.0,
-                    "tb": p.get("kickKoTb", 0) or 0,
-                    "ob": p.get("kickKoOb", 0) or 0,
-                })
-            if (p.get("returnsKickNo") or 0) > 0:
-                n = p.get("returnsKickNo") or 0; yds = p.get("returnsKickYards") or 0
-                kick_ret.append({
-                    "uni": uni, "name": name, "no": n, "yds": yds,
-                    "avg": round(yds / n, 1) if n else 0.0,
-                    "long": p.get("returnsKickLong", 0) or 0,
-                    "td": p.get("returnsKickTd", 0) or 0,
-                })
-            if (p.get("returnsPuntNo") or 0) > 0:
-                n = p.get("returnsPuntNo") or 0; yds = p.get("returnsPuntYards") or 0
-                punt_ret.append({
-                    "uni": uni, "name": name, "no": n, "yds": yds,
-                    "avg": round(yds / n, 1) if n else 0.0,
-                    "long": p.get("returnsPuntLong", 0) or 0,
-                    "td": p.get("returnsPuntTd", 0) or 0,
-                })
-            if (p.get("returnsIntNo") or 0) > 0:
-                n = p.get("returnsIntNo") or 0; yds = p.get("returnsIntYards") or 0
-                int_ret.append({
-                    "uni": uni, "name": name, "no": n, "yds": yds,
-                    "avg": round(yds / n, 1) if n else 0.0,
-                    "long": p.get("returnsIntLong", 0) or 0,
-                    "td": p.get("returnsIntTd", 0) or 0,
-                })
-            if (p.get("returnsFumbNo") or 0) > 0:
-                n = p.get("returnsFumbNo") or 0; yds = p.get("returnsFumbYards") or 0
-                fum_ret.append({
-                    "uni": uni, "name": name, "no": n, "yds": yds,
-                    "long": p.get("returnsFumbLong", 0) or 0,
-                    "td": p.get("returnsFumbTd", 0) or 0,
-                })
-            if (p.get("fumblesNo") or 0) > 0:
-                fumbles.append({
-                    "uni": uni, "name": name,
-                    "no": p.get("fumblesNo", 0) or 0,
-                    "lost": p.get("fumblesLost", 0) or 0,
-                })
-
-            d_total = ((p.get("defenseTackUa") or 0) + (p.get("defenseTackA") or 0))
-            d_any = d_total or (p.get("defensePassBrUp") or 0) or (p.get("defenseFumbForc") or 0) \
-                    or (p.get("defenseFumbRcvr") or 0) or (p.get("defenseQbh") or 0) \
-                    or (p.get("defenseSackUa") or 0) or (p.get("defenseSackA") or 0) \
-                    or (p.get("defenseTflUa") or 0) or (p.get("defenseTflA") or 0)
-            if d_any:
-                solo = p.get("defenseTackUa", 0) or 0
-                ast = p.get("defenseTackA", 0) or 0
-                sacks_u = p.get("defenseSackUa", 0) or 0
-                sacks_a = p.get("defenseSackA", 0) or 0
-                tfl_u = p.get("defenseTflUa", 0) or 0
-                tfl_a = p.get("defenseTflA", 0) or 0
-                sack_str = self._half_format(sacks_u, sacks_a, p.get("defenseSackWinLossYards"))
-                tfl_str = self._half_format(tfl_u, tfl_a, p.get("defenseTflLossYards"))
-                defense.append({
-                    "uni": uni, "name": name,
-                    "solo": solo, "ast": ast, "total": solo + ast,
-                    "sacks": sack_str, "tfl": tfl_str,
-                    "ff": p.get("defenseFumbForc", 0) or 0,
-                    "fr": p.get("defenseFumbRcvr", 0) or 0,
-                    "fr_yds": p.get("returnsFumbYards", 0) or 0,
-                    "int": p.get("returnsIntNo", 0) or 0,
-                    "int_yds": p.get("returnsIntYards", 0) or 0,
-                    "brup": p.get("defensePassBrUp", 0) or 0,
-                    "blks": p.get("defenseBlkdKick", 0) or 0,
-                    "qbh": p.get("defenseQbh", 0) or 0,
-                })
-        return {
-            "passing": passing, "rushing": rushing, "receiving": receiving,
-            "kicking": kicking, "punting": punting, "kickoffs": ko_team,
-            "kick_returns": kick_ret, "punt_returns": punt_ret,
-            "int_returns": int_ret, "fumble_returns": fum_ret,
-            "defense": defense, "fumbles": fumbles,
-        }
-
-    def _half_format(self, unassisted: int, assisted: int, yards: Any) -> str:
-        """Format football half-sack/half-TFL totals as 'X.Y - YDS' or '-'."""
-        u = float(unassisted or 0)
-        a = float(assisted or 0)
-        tot = u + (a / 2.0)
-        if tot == 0:
-            return "-"
-        y = int(yards or 0)
-        tot_str = (f"{tot:.1f}" if tot != int(tot) else f"{int(tot)}")
-        if y:
-            return f"{tot_str}-{y}"
-        return tot_str
-
-    def _drive_chart(self, ev: Dict[str, Any], vis_blob: Dict[str, Any], home_blob: Dict[str, Any]) -> List[Dict[str, Any]]:
-        rows = []
-        for d in ev.get("drives") or []:
-            home_team = bool(d.get("homeTeam"))
-            team = home_blob if home_team else vis_blob
-            rows.append({
-                "team": team.get("name") or ("Home" if home_team else "Visitor"),
-                "team_v": not home_team,
-                "plays": d.get("playsSum") or 0,
-                "yards": d.get("yards") or 0,
-                "top": _format_top(d.get("topSecs") or 0),
-                "start_qtr": d.get("startQuarter"),
-                "start_how": d.get("startHow"),
-                "end_qtr": d.get("endQuarter"),
-                "end_how": d.get("endHow"),
-                "red_zone": bool(d.get("redZone")),
-            })
-        return rows
-
-    # ── XML emitter pieces ───────────────────────────────────────────────────
-
-    def _write_venue(self, root, game, ev, vis, home, vis_id, home_id):
-        venue = ET.SubElement(root, "venue")
-        venue.set("gameid", str(game.id or ""))
-        venue.set("visid", vis_id)
-        venue.set("visname", vis.name if vis else "")
-        venue.set("homeid", home_id)
-        venue.set("homename", home.name if home else "")
-        venue.set("date", _venue_date(game.date or "") or (ev.get("date") or ""))
-        venue.set("location", game.location or ev.get("location") or "")
-        venue.set("stadium", game.stadium or "")
-        venue.set("start", game.start_time or ev.get("timeStart") or "")
-        venue.set("end", ev.get("timeEnd") or "")
-        venue.set("duration", game.duration or ev.get("duration") or "")
-        venue.set("delay", game.delayed_time or ev.get("delayDuration") or "")
-        venue.set("attend", str(game.attendance or ev.get("attendance") or 0))
-        venue.set("schednote", "")
-        venue.set("leaguegame", "Y" if game.is_league_game else "N")
-        venue.set("neutralgame", "Y" if game.is_neutral else "N")
-        venue.set("postseason", "Y" if (ev.get("postseason") or False) else "N")
-
-        officials = ET.SubElement(venue, "officials")
-        refs = ev.get("referees") or ["", "", "", "", "", "", "", "", ""]
-        # Order per Presto: ref ump line lj bj fj sj sc cj
-        keys = ["ref", "ump", "line", "lj", "bj", "fj", "sj", "sc", "cj"]
-        for i, k in enumerate(keys):
-            officials.set(k, str(refs[i]) if i < len(refs) and refs[i] else "")
-
-        rules = ET.SubElement(venue, "rules")
-        rules.set("qtrs", str(ev.get("rulesPeriods") or 4))
-        rules.set("mins", str(ev.get("minutesPrd") or 15))
-        rules.set("downs", str(ev.get("downs") or 4))
-        rules.set("yds", str(ev.get("firstDownYards") or 10))
-        rules.set("kospot", str(ev.get("kickoffSpot") or 35))
-        rules.set("kotbspot", str(ev.get("otherTouchBack") or 25))
-        rules.set("tbspot", str(ev.get("touchBackSpot") or 20))
-        rules.set("patspot", str(ev.get("patTrySpot") or 3))
-        rules.set("safspot", str(ev.get("safetySpot") or 20))
-        rules.set("td", str(ev.get("touchDown") or 6))
-        rules.set("fg", str(ev.get("fieldGoal") or 3))
-        rules.set("pat", str(ev.get("kickPat") or 1))
-        rules.set("patx", str(ev.get("otherPat") or 2))
-        rules.set("saf", str(ev.get("safety") or 2))
-        rules.set("defpat", str(ev.get("defPat") or 2))
-        rules.set("rouge", str(ev.get("rouge") or 1))
-        rules.set("field", str(ev.get("fieldLength") or 100))
-        rules.set("toh", str(ev.get("toHalf") or 3))
-        rules.set("sackrush", "Y" if ev.get("sackRush") else "N")
-        rules.set("fgaplay", "Y" if ev.get("fgaDrvPlay") else "N")
-        rules.set("netpunttb", "Y")
-
-    def _write_status(self, root, ev):
-        status = ET.SubElement(root, "status")
-        try:
-            sc = int(ev.get("statusCode") or 0)
-        except (TypeError, ValueError):
-            sc = 2 if str(ev.get("status") or "").lower().startswith("final") else 0
-        complete = sc >= 2
-        status.set("complete", "Y" if complete else "N")
-        status.set("running", "F")
-        try:
-            period = int(ev.get("statusPeriod") or 0)
-        except (TypeError, ValueError):
-            period = 0
-        status.set("period", str(period))
-        def _toi(x):
-            try:
-                return int(x)
-            except (TypeError, ValueError):
-                return 0
-        mins = _toi(ev.get("currentMinute") or ev.get("statusMinutes") or 0)
-        secs = _toi(ev.get("currentSecond") or ev.get("statusSeconds") or 0)
-        status.set("clock", f"{mins:02d}:{secs:02d}")
-
-    def _write_team(self, root, vh, team, team_blob, opp_blob, vis_id, home_id, blob):
-        if not team_blob:
-            return
-        t_el = ET.SubElement(root, "team")
-        t_el.set("vh", vh)
-        t_el.set("code", team_blob.get("name") or (team.name if team else ""))
-        t_el.set("id", team_blob.get("abbr") or _ext_id(team))
-        t_el.set("name", team_blob.get("name") or (team.name if team else ""))
-        t_el.set("record", team_blob.get("record") or "0-0")
-        t_el.set("conf-record", team_blob.get("record_conf") or "0")
-        t_el.set("abb", team_blob.get("keyStroke") or (team.abbreviation if team else ""))
-
-        # Linescore
-        prd_scores = [int((p.get("score") or 0)) for p in (team_blob.get("periodstats") or [])]
-        if not prd_scores:
-            prd_scores = [0, 0, 0, 0]
-        ln = ET.SubElement(t_el, "linescore")
-        ln.set("prds", str(len(prd_scores)))
-        ln.set("line", ",".join(str(s) for s in prd_scores))
-        ln.set("score", str(sum(prd_scores)))
-        for i, s in enumerate(prd_scores, start=1):
-            lp = ET.SubElement(ln, "lineprd")
-            lp.set("prd", str(i))
-            lp.set("score", str(s))
-
-        # Team totals + sub-blocks
-        totals = ET.SubElement(t_el, "totals")
-        tot_off_plays = team_blob.get("totalOffPlays")
-        tot_off_yards = team_blob.get("totalOffYards")
-        if tot_off_plays:
-            totals.set("totoff_plays", str(tot_off_plays))
-        if tot_off_yards:
-            totals.set("totoff_yards", str(tot_off_yards))
-        if tot_off_plays:
-            try:
-                avg = round((tot_off_yards or 0) / tot_off_plays, 1)
-                totals.set("totoff_avg", str(avg))
-            except ZeroDivisionError:
-                pass
-
-        for tag in ("firstdowns", "penalties", "conversions", "fumbles"):
-            _emit_block(totals, tag, team_blob, _BLOCKS[tag])
-        # misc with TOP (mm:ss)
-        misc_yds = team_blob.get("miscYards") or 0
-        top_secs = team_blob.get("miscPossession") or 0
-        if misc_yds or top_secs:
-            misc = ET.SubElement(totals, "misc")
-            top_mm = top_secs // 60 if top_secs else 0
-            top_ss = top_secs % 60 if top_secs else 0
-            misc.set("top", f"{top_mm:02d}:{top_ss:02d}")
-            misc.set("ona", "0")
-            misc.set("onm", "0")
-            misc.set("yds", str(misc_yds))
-        _emit_block(totals, "redzone", team_blob, _BLOCKS["redzone"])
-        for tag in ("rush", "pass", "rcv", "punt", "ko", "fg", "pat", "defense", "kr", "pr", "fr", "ir"):
-            _emit_block(totals, tag, team_blob, _BLOCKS[tag])
-
-        # Team scoring summary (td/patkick/...) — derived from <scoring> events
-        ev = blob.get("eventInfo") or {}
-        scoring_evs = ev.get("scoring") or []
-        is_visitor = vh == "V"
-        s_tot = {"td": 0, "fg": 0, "saf": 0, "patkick": 0, "patrcv": 0, "patrush": 0, "patpass": 0}
-        for s in scoring_evs:
-            if bool(s.get("homeTeam")) != (not is_visitor):
-                continue
-            stype = (s.get("type") or "").upper()
-            if stype == "TD":
-                s_tot["td"] += 1
-            elif stype == "FG":
-                s_tot["fg"] += 1
-            elif stype == "SAF":
-                s_tot["saf"] += 1
-            kind = self._pat_kind_from_code(s.get("patCode"))
-            if (s.get("patres") or "").upper() == "GOOD" or kind:
-                if kind == "kick":
-                    s_tot["patkick"] += 1
-                elif kind == "rush":
-                    s_tot["patrush"] += 1
-                elif kind == "pass":
-                    s_tot["patpass"] += 1
-        if any(v for v in s_tot.values()):
-            sc = ET.SubElement(totals, "scoring")
-            for k, v in s_tot.items():
-                if v:
-                    sc.set(k, str(v))
-
-        # Per-player stat lines (only players with stats or 'gp')
-        for p in team_blob.get("players", []):
-            pe = ET.SubElement(t_el, "player")
-            uni = str(p.get("uniform") or "")
-            name = (p.get("completeName") or "").strip()
-            pe.set("uni", uni)
-            pe.set("name", name)
-            pe.set("checkname", _checkname(name))
-            pe.set("shortname", _short_name(name))
-            pe.set("gp", "1" if p.get("participated") else "0")
-            pe.set("code", uni)
-            pe.set("playerId", p.get("playerId") or "")
-            for tag in _PLAYER_BLOCK_ORDER:
-                if tag == "fumbles":
-                    if (p.get("fumblesNo") or 0):
-                        fb = ET.SubElement(pe, "fumbles")
-                        fb.set("no", str(p.get("fumblesNo") or 0))
-                        fb.set("lost", str(p.get("fumblesLost") or 0))
-                    continue
-                _emit_block(pe, tag, p, _BLOCKS[tag])
-            # Per-player scoring tally (used by Presto reports)
-            score_attrs: Dict[str, int] = {}
-            td_total = (p.get("rushTd", 0) or 0) + (p.get("passTd", 0) or 0) + \
-                       (p.get("receivingTd", 0) or 0) + (p.get("returnsKickTd", 0) or 0) + \
-                       (p.get("returnsPuntTd", 0) or 0) + (p.get("returnsIntTd", 0) or 0) + \
-                       (p.get("returnsFumbTd", 0) or 0)
-            if td_total:
-                score_attrs["td"] = td_total
-            if p.get("epOffKickMd"):
-                score_attrs["patkick"] = p["epOffKickMd"]
-            if p.get("epOffPassMd"):
-                score_attrs["patpass"] = p["epOffPassMd"]
-            if p.get("epOffRushMd"):
-                score_attrs["patrush"] = p["epOffRushMd"]
-            if p.get("epOffRcvMd"):
-                score_attrs["patrcv"] = p["epOffRcvMd"]
-            if p.get("kickFgMad"):
-                score_attrs["fg"] = p["kickFgMad"]
-            if score_attrs:
-                sc = ET.SubElement(pe, "scoring")
-                for k, v in score_attrs.items():
-                    sc.set(k, str(v))
-
-    def _write_scores(self, root, ev, vis_blob, home_blob, vis_id, home_id):
-        scoring = ev.get("scoring") or []
-        if not scoring:
-            return
-        scores = ET.SubElement(root, "scores")
-        for s in scoring:
-            sc = ET.SubElement(scores, "score")
-            home_team = bool(s.get("homeTeam"))
-            team_blob = home_blob if home_team else vis_blob
-            scorer = self._player_label(team_blob, str(s.get("scorer") or ""))
-            passer = self._player_label(team_blob, str(s.get("passer") or "")) if s.get("passer") else ""
-            patby  = self._player_label(team_blob, str(s.get("patBy") or "")) if s.get("patBy") else ""
-            mins = int(s.get("mins") or 0); secs = int(s.get("secs") or 0)
-            sc.set("how", (s.get("how") or "").upper())
-            sc.set("patby", patby)
-            sc.set("qtr", str(s.get("quarter") or 0))
-            sc.set("team", team_blob.get("abbr") or (home_id if home_team else vis_id))
-            sc.set("scorer", scorer)
-            if passer:
-                sc.set("passer", passer)
-            sc.set("vh", "H" if home_team else "V")
-            sc.set("type", (s.get("type") or "").upper())
-            sc.set("clock", f"{mins:02d}:{secs:02d}")
-            sc.set("driveindex", str(s.get("driveIdx") or 0))
-            sc.set("hscore", str(s.get("homeScore") or 0))
-            sc.set("vscore", str(s.get("visitorScore") or 0))
-            if s.get("yards") is not None:
-                sc.set("yds", str(s.get("yards")))
-            patres = (s.get("patres") or "").upper()
-            patcode = s.get("patCode")
-            kind = self._pat_kind_from_code(patcode)
-            if patres:
-                sc.set("patres", patres)
-            elif kind:
-                sc.set("patres", "GOOD")
-            if kind:
-                sc.set("pattype", kind.upper())
-
-    def _write_fgas(self, root, ev, vis_blob, home_blob, vis_id, home_id):
-        goals = ev.get("goals") or []
-        if not goals:
-            return
-        fgas = ET.SubElement(root, "fgas")
-        for g in goals:
-            fga = ET.SubElement(fgas, "fga")
-            home_team = bool(g.get("homeTeam"))
-            team_blob = home_blob if home_team else vis_blob
-            kicker = self._player_label(team_blob, str(g.get("uniform") or ""))
-            secs = int(g.get("secs") or 0)
-            clock = f"{secs // 60:02d}:{secs % 60:02d}"
-            fga.set("distance", str(g.get("distance") or 0))
-            fga.set("clock", clock)
-            fga.set("qtr", str(g.get("quarter") or 0))
-            res = (g.get("result") or "").upper()
-            fga.set("result", "good" if res in ("G", "GOOD") else ("blocked" if res in ("B", "BLK") else "no good"))
-            fga.set("team", team_blob.get("abbr") or (home_id if home_team else vis_id))
-            fga.set("vh", "H" if home_team else "V")
-            fga.set("kicker", kicker)
-
-    def _write_drives(self, root, ev, vis_id, home_id):
-        drives = ev.get("drives") or []
-        if not drives:
-            return
-        d_el = ET.SubElement(root, "drives")
-        for i, d in enumerate(drives, start=1):
-            de = ET.SubElement(d_el, "drive")
-            de.set("driveindex", str(i))
-            home_team = bool(d.get("homeTeam"))
-            tid = home_id if home_team else vis_id
-            de.set("vh", "H" if home_team else "V")
-            de.set("yards", str(d.get("yards") or 0))
-            de.set("top", _format_top(d.get("topSecs") or 0))
-            de.set("end_how", d.get("endHow") or "")
-            de.set("end_qtr", str(d.get("endQuarter") or 0))
-            esecs = int(d.get("endSecs") or 0)
-            de.set("end_time", f"{esecs // 60:02d}:{esecs % 60:02d}")
-            de.set("end_spot", f"STATS{tid}{int(d.get('endSpot') or 0):02d}")
-            de.set("start_how", d.get("startHow") or "")
-            de.set("start_qtr", str(d.get("startQuarter") or 0))
-            ssecs = int(d.get("startSecs") or 0)
-            de.set("start_time", f"{ssecs // 60:02d}:{ssecs % 60:02d}")
-            de.set("start_spot", f"STATS{tid}{int(d.get('startSpot') or 0):02d}")
-            de.set("plays", str(d.get("playsSum") or 0))
-            de.set("team", tid)
-            if d.get("redZone"):
-                de.set("rz", "1")
-
-    def _write_plays(self, root, blob, vis_id, home_id, vis_blob, home_blob):
-        """Emit ``<plays format='summary'>`` with one ``<qtr>`` per period.
-
-        We use the decoded narrative (best-effort) so the XML round-trips
-        readably; deeper p_* sub-elements are added when easily derivable from
-        the RAW_PLAY tokens."""
-        plays_dict = blob.get("plays") or {}
-        if not plays_dict:
-            return
-        plays_el = ET.SubElement(root, "plays")
-        plays_el.set("format", "summary")
-        for prd_key in sorted(plays_dict.keys(), key=lambda k: int(k)):
-            qtr_el = ET.SubElement(plays_el, "qtr")
-            qtr_el.set("number", prd_key)
-            qtr_el.set("text", _ord(int(prd_key)))
-            for play in plays_dict[prd_key]:
-                props = play.get("props") or {}
-                raw = props.get("RAW_PLAY") or ""
-                pos_is_home = _possession_is_home(props, play)
-                pos = home_blob if pos_is_home else vis_blob
-                deff = vis_blob if pos_is_home else home_blob
-                text = decode_play(
-                    raw,
-                    possession_team=pos, defense_team=deff,
-                    vis_id=vis_id, home_id=home_id,
-                    vis_blob=vis_blob, home_blob=home_blob,
-                )
-                if text is None:
-                    text = props.get("COMMENT") or raw
-                if not text:
-                    continue
-                pe = ET.SubElement(qtr_el, "play")
-                pe.set("hasball", (home_blob.get("abbr") if pos_is_home else vis_blob.get("abbr")) or "")
-                pe.set("text", text)
-                pe.set("clock", props.get("CLOCK") or "")
-                pe.set("playid", play.get("id") or "")
-            ET.SubElement(qtr_el, "endqtr")
-
-
-def _ord(n: int) -> str:
-    if 11 <= (n % 100) <= 13:
-        return f"{n}th"
-    return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-
-
-def _safe_int(x: Any) -> int:
-    try:
-        return int(x)
-    except (TypeError, ValueError):
+        return _empty_blob(game)
+
+
+def _empty_blob(game):
+    """Build a minimal blob shell when no GWT data has been saved yet."""
+    return {
+        'teams': [
+            {'name': (game.visitor_team.name if game.visitor_team else ''),
+             'customizedName': (game.visitor_team.name if game.visitor_team else ''),
+             'abbr': (game.visitor_team.abbreviation or game.visitor_team.code) if game.visitor_team else 'VIS',
+             'record': '0-0', 'players': [], 'periodstats': []},
+            {'name': (game.home_team.name if game.home_team else ''),
+             'customizedName': (game.home_team.name if game.home_team else ''),
+             'abbr': (game.home_team.abbreviation or game.home_team.code) if game.home_team else 'HOM',
+             'record': '0-0', 'players': [], 'periodstats': []},
+        ],
+        'eventInfo': {
+            'date': _date_us(game.date),
+            'location': game.location or '',
+            'gamePeriods': game.scheduled_innings or 4,
+            'minutesPrd': 15,
+            'scoring': [],
+            'drives': [],
+            'sportCode': 'fball',
+            'startingTeam': 'V',
+            'referees': ['', '', '', '', '', '', '', game.scorer or '', ''],
+        },
+        'plays': [''] * (game.scheduled_innings or 4),
+        'countPeriods': game.scheduled_innings or 4,
+        'gamePeriods': game.scheduled_innings or 4,
+    }
+
+
+# ── normalized boxscore for templates / JSON ─────────────────────────────
+
+def boxscore_data(game):
+    """Build a sport-aware boxscore dict suitable for HTML/PDF/JSON.
+
+    The shape is football-specific (no innings/batting/pitching). All player
+    rows are filtered to participants only and sorted into the position-group
+    tables that the PDF/HTML layouts use.
+    """
+    blob = _load_blob(game)
+    ev = blob.get('eventInfo') or {}
+    teams = blob.get('teams') or [{}, {}]
+    if len(teams) < 2:
+        teams = teams + [{}] * (2 - len(teams))
+
+    vis_team = teams[0] or {}
+    home_team = teams[1] or {}
+    starting_visitor = (ev.get('startingTeam') or 'V').upper() == 'V'
+
+    # Linescore: one cell per period from periodstats[].score.
+    nperiods = max(len(vis_team.get('periodstats') or []),
+                   len(home_team.get('periodstats') or []),
+                   int(ev.get('gamePeriods') or 4))
+
+    def _period_score(team, i):
+        ps = team.get('periodstats') or []
+        if i < len(ps):
+            v = _safe_int(ps[i].get('score'), 0)
+            return 'X' if v == 99 else v
         return 0
 
+    linescore = []
+    for i in range(nperiods):
+        linescore.append({
+            'period': i + 1,
+            'label': _qtr_label(i + 1),
+            'v': _period_score(vis_team, i),
+            'h': _period_score(home_team, i),
+        })
 
-def _possession_is_home(props: Dict[str, Any], play: Dict[str, Any]) -> bool:
-    """Decide which team has the ball for a play.
+    def _team_score(team):
+        total = 0
+        for ps in (team.get('periodstats') or []):
+            s = _safe_int(ps.get('score'), 0)
+            if s != 99:
+                total += s
+        return total
 
-    The play record's ``homeTeam`` flag tracks the side that entered the play
-    in GWT, not who actually had possession (e.g. a defensive tackle ends up
-    flagged as the defending side). The reliable signal is the third comma-
-    separated field of ``INITIAL_CONTEXT`` (``V`` or ``H``)."""
-    ctx = props.get("INITIAL_CONTEXT") or props.get("UPDATED_CONTEXT") or ""
-    if ctx:
-        parts = ctx.split(",")
-        if len(parts) >= 3:
-            side = (parts[2] or "").strip().upper()
-            if side == "H":
-                return True
-            if side == "V":
-                return False
-    return bool(play.get("homeTeam"))
+    vis_score = _team_score(vis_team)
+    home_score = _team_score(home_team)
+
+    # Per-team totals (used in "TEAM SUMMARY" rows).
+    def _team_totals(t):
+        ra = _safe_int(t.get('rushAtt'))
+        ry = _safe_int(t.get('rushYards'))
+        rl = _safe_int(t.get('rushWinLoss'))  # negative
+        pcomp = _safe_int(t.get('passComp'))
+        patt = _safe_int(t.get('passAtt'))
+        psacks = _safe_int(t.get('passSacks'))
+        psy = _safe_int(t.get('passSackYards'))
+        pty = _safe_int(t.get('passYards'))
+        return {
+            'first_downs': _safe_int(t.get('firstDownNo')),
+            'fd_rush':    _safe_int(t.get('firstDownRush')),
+            'fd_pass':    _safe_int(t.get('firstDownPass')),
+            'fd_penalty': _safe_int(t.get('firstDownPenalty')),
+            'rush_att':   ra,
+            'rush_yds':   ry,
+            'rush_loss':  abs(rl),
+            'rush_gain':  ry - rl,
+            'pass_att':   patt,
+            'pass_comp':  pcomp,
+            'pass_int':   _safe_int(t.get('passInt')),
+            'pass_yds':   pty,
+            'pass_td':    _safe_int(t.get('passTd')),
+            'pass_sacks': psacks,
+            'pass_sack_yds': psy,
+            'plays':      _safe_int(t.get('totalOffPlays')),
+            'total_yds':  _safe_int(t.get('totalOffYards')),
+            'fumb_no':    _safe_int(t.get('fumblesNo')),
+            'fumb_lost':  _safe_int(t.get('fumblesLost')),
+            'pen_no':     _safe_int(t.get('penaltyNo')),
+            'pen_yds':    _safe_int(t.get('penaltyYards')),
+            'punt_no':    _safe_int(t.get('kickPuntNo')),
+            'punt_yds':   _safe_int(t.get('kickPuntYards')),
+            'punt_avg':   _punt_avg(t.get('kickPuntAvg')),
+            'punt_long':  _safe_int(t.get('kickPuntLong')),
+            'punt_tb':    _safe_int(t.get('kickPuntTb')),
+            'punt_i20':   _safe_int(t.get('kickPuntI20')),
+            'punt_50':    _safe_int(t.get('kickPunt50')),
+            'ko_no':      _safe_int(t.get('kickKoNo')),
+            'ko_yds':     _safe_int(t.get('kickKoYards')),
+            'ko_tb':      _safe_int(t.get('kickKoTb')),
+            'ko_ob':      _safe_int(t.get('kickKoOb')),
+            'kr_no':      _safe_int(t.get('returnsKickNo')),
+            'kr_yds':     _safe_int(t.get('returnsKickYards')),
+            'kr_long':    _safe_int(t.get('returnsKickLong')),
+            'kr_td':      _safe_int(t.get('returnsKickTd')),
+            'pr_no':      _safe_int(t.get('returnsPuntNo')),
+            'pr_yds':     _safe_int(t.get('returnsPuntYards')),
+            'pr_long':    _safe_int(t.get('returnsPuntLong')),
+            'pr_td':      _safe_int(t.get('returnsPuntTd')),
+            'ir_no':      _safe_int(t.get('returnsIntNo')),
+            'ir_yds':     _safe_int(t.get('returnsIntYards')),
+            'ir_long':    _safe_int(t.get('returnsIntLong')),
+            'ir_td':      _safe_int(t.get('returnsIntTd')),
+            'fr_no':      _safe_int(t.get('returnsFumbNo')),
+            'fr_yds':     _safe_int(t.get('returnsFumbYards')),
+            'fr_long':    _safe_int(t.get('returnsFumbLong')),
+            'fr_td':      _safe_int(t.get('returnsFumbTd')),
+            'fg_made':    _safe_int(t.get('kickFgMad')),
+            'fg_att':     _safe_int(t.get('kickFgAtt')),
+            'fg_long':    _safe_int(t.get('kickFgLong')),
+            'fg_blk':     _safe_int(t.get('kickFgBlk')),
+            'pat_kick_md': _safe_int(t.get('epOffKickMd')),
+            'pat_kick_at': _safe_int(t.get('epOffKickAt')),
+            'pat_pass_md': _safe_int(t.get('epOffPassMd')),
+            'pat_pass_at': _safe_int(t.get('epOffPassAt')),
+            'pat_rush_md': _safe_int(t.get('epOffRushMd')),
+            'pat_rush_at': _safe_int(t.get('epOffRushAt')),
+            'pat_rcv_md':  _safe_int(t.get('epOffRcvMd')),
+            'def_fumb_forc': _safe_int(t.get('defenseFumbForc')),
+            'def_fumb_rcvr': _safe_int(t.get('defenseFumbRcvr')),
+            'def_brup':      _safe_int(t.get('defensePassBrUp')),
+            'def_sack_ua':   _safe_int(t.get('defenseSackUa')),
+            'def_sack_a':    _safe_int(t.get('defenseSackA')),
+            'def_sack_yds':  abs(_safe_int(t.get('defenseSackWinLossYards'))),
+            'def_tack_ua':   _safe_int(t.get('defenseTackUa')),
+            'def_tack_a':    _safe_int(t.get('defenseTackA')),
+            'def_tfl_ua':    _safe_int(t.get('defenseTflUa')),
+            'def_tfl_a':     _safe_int(t.get('defenseTflA')),
+            'def_tfl_yds':   abs(_safe_int(t.get('defenseTflLossYards'))),
+            'def_qbh':       _safe_int(t.get('defenseQbh')),
+            'def_saf':       _safe_int(t.get('defenseSaf')),
+            'def_blk':       _safe_int(t.get('defenseBlkdKick')),
+            # Conversions
+            'third_conv':   _safe_int(t.get('conversionThirdConv')),
+            'third_att':    _safe_int(t.get('conversionThirdAtt')),
+            'fourth_conv':  _safe_int(t.get('conversionFourthConv')),
+            'fourth_att':   _safe_int(t.get('conversionFourthAtt')),
+            'top_secs':     _safe_int(t.get('miscPossession')),
+            'top':          _mmss(_safe_int(t.get('miscPossession'))),
+            # Red zone
+            'rz_att':       _safe_int(t.get('redZoneTimeInside20')),
+            'rz_scores':    _safe_int(t.get('redZoneTimeScored')),
+            'rz_points':    _safe_int(t.get('redZonePointsScored')),
+            'rz_td_rush':   _safe_int(t.get('redZoneRushingTds')),
+            'rz_td_pass':   _safe_int(t.get('redZonePassingTds')),
+            'rz_fg':        _safe_int(t.get('redZoneFgsMade')),
+            'rz_end_fga':   _safe_int(t.get('redZoneEndOnFga')),
+            'rz_end_dn':    _safe_int(t.get('redZoneEndOnDowns')),
+            'rz_end_int':   _safe_int(t.get('redZoneEndOnIntCpt')),
+            'rz_end_fumb':  _safe_int(t.get('redZoneEndOnFumble')),
+            'rz_end_half':  _safe_int(t.get('redZoneEndOfHalf')),
+            'rz_end_game':  _safe_int(t.get('redZoneEndOfGame')),
+        }
+
+    def _participated(p):
+        return bool(p.get('participated')) or any(
+            _safe_int(p.get(k)) for k in
+            ('rushAtt', 'passAtt', 'receivingNo', 'kickKoNo', 'kickPuntNo',
+             'returnsKickNo', 'returnsPuntNo', 'returnsIntNo', 'returnsFumbNo',
+             'defenseTackUa', 'defenseTackA', 'defenseTflUa', 'defenseTflA',
+             'defensePassBrUp', 'defenseSackUa', 'defenseSackA', 'defenseQbh',
+             'defenseFumbForc', 'defenseFumbRcvr', 'defenseSaf', 'defenseBlkdKick',
+             'kickFgAtt', 'epOffKickAt', 'epOffPassAt', 'epOffRushAt'))
+
+    def _player_view(p):
+        ra = _safe_int(p.get('rushAtt'))
+        ry = _safe_int(p.get('rushYards'))
+        rl = _safe_int(p.get('rushWinLoss'))
+        return {
+            'uni':   p.get('uniform') or '',
+            'name':  p.get('completeName') or '',
+            'pos':   p.get('pos') or p.get('position') or '',
+            'starter': bool(p.get('starter') or p.get('starterOff') or p.get('starterDef')),
+            # rushing
+            'rush_att':  ra,
+            'rush_yds':  ry,
+            'rush_long': _safe_int(p.get('rushLong')),
+            'rush_loss': abs(rl),
+            'rush_avg':  _avg_thousandths(p.get('rushAvg')) or (ry / ra if ra else 0.0),
+            'rush_td':   _safe_int(p.get('rushTd')),
+            # passing
+            'pass_att':  _safe_int(p.get('passAtt')),
+            'pass_comp': _safe_int(p.get('passComp')),
+            'pass_yds':  _safe_int(p.get('passYards')),
+            'pass_long': _safe_int(p.get('passLong')),
+            'pass_td':   _safe_int(p.get('passTd')),
+            'pass_int':  _safe_int(p.get('passInt')),
+            'pass_sacks':_safe_int(p.get('passSacks')),
+            'pass_sack_yds': _safe_int(p.get('passSackYards')),
+            # receiving
+            'rec_no':    _safe_int(p.get('receivingNo')),
+            'rec_yds':   _safe_int(p.get('receivingYards')),
+            'rec_long':  _safe_int(p.get('receivingLong')),
+            'rec_td':    _safe_int(p.get('receivingTd')),
+            'rec_avg':   _avg_thousandths(p.get('receivingAvg')) or (_safe_int(p.get('receivingYards')) / _safe_int(p.get('receivingNo'))) if _safe_int(p.get('receivingNo')) else 0.0,
+            # kicking
+            'fg_made':   _safe_int(p.get('kickFgMad')),
+            'fg_att':    _safe_int(p.get('kickFgAtt')),
+            'fg_long':   _safe_int(p.get('kickFgLong')),
+            'fg_blk':    _safe_int(p.get('kickFgBlk')),
+            'pat_kick_md': _safe_int(p.get('epOffKickMd')),
+            'pat_kick_at': _safe_int(p.get('epOffKickAt')),
+            'pat_pass_md': _safe_int(p.get('epOffPassMd')),
+            'pat_pass_at': _safe_int(p.get('epOffPassAt')),
+            'pat_rush_md': _safe_int(p.get('epOffRushMd')),
+            'pat_rush_at': _safe_int(p.get('epOffRushAt')),
+            'pat_rcv_md':  _safe_int(p.get('epOffRcvMd')),
+            # punting
+            'punt_no':   _safe_int(p.get('kickPuntNo')),
+            'punt_yds':  _safe_int(p.get('kickPuntYards')),
+            'punt_avg':  _punt_avg(p.get('kickPuntAvg')),
+            'punt_long': _safe_int(p.get('kickPuntLong')),
+            'punt_tb':   _safe_int(p.get('kickPuntTb')),
+            'punt_i20':  _safe_int(p.get('kickPuntI20')),
+            'punt_blkd': _safe_int(p.get('kickPuntBlkd')),
+            'punt_50':   _safe_int(p.get('kickPunt50')),
+            'punt_fc':   _safe_int(p.get('kickPuntFc')),
+            # kickoffs
+            'ko_no':     _safe_int(p.get('kickKoNo')),
+            'ko_yds':    _safe_int(p.get('kickKoYards')),
+            'ko_tb':     _safe_int(p.get('kickKoTb')),
+            'ko_ob':     _safe_int(p.get('kickKoOb')),
+            # returns
+            'kr_no':     _safe_int(p.get('returnsKickNo')),
+            'kr_yds':    _safe_int(p.get('returnsKickYards')),
+            'kr_long':   _safe_int(p.get('returnsKickLong')),
+            'kr_td':     _safe_int(p.get('returnsKickTd')),
+            'pr_no':     _safe_int(p.get('returnsPuntNo')),
+            'pr_yds':    _safe_int(p.get('returnsPuntYards')),
+            'pr_long':   _safe_int(p.get('returnsPuntLong')),
+            'pr_td':     _safe_int(p.get('returnsPuntTd')),
+            'ir_no':     _safe_int(p.get('returnsIntNo')),
+            'ir_yds':    _safe_int(p.get('returnsIntYards')),
+            'ir_long':   _safe_int(p.get('returnsIntLong')),
+            'ir_td':     _safe_int(p.get('returnsIntTd')),
+            'fr_no':     _safe_int(p.get('returnsFumbNo')),
+            'fr_yds':    _safe_int(p.get('returnsFumbYards')),
+            'fr_long':   _safe_int(p.get('returnsFumbLong')),
+            'fr_td':     _safe_int(p.get('returnsFumbTd')),
+            # fumbles
+            'fumb_no':   _safe_int(p.get('fumblesNo')),
+            'fumb_lost': _safe_int(p.get('fumblesLost')),
+            # defense
+            'def_tack_ua': _safe_int(p.get('defenseTackUa')),
+            'def_tack_a':  _safe_int(p.get('defenseTackA')),
+            'def_tfl_ua':  _safe_int(p.get('defenseTflUa')),
+            'def_tfl_a':   _safe_int(p.get('defenseTflA')),
+            'def_tfl_yds': abs(_safe_int(p.get('defenseTflLossYards'))),
+            'def_sack_ua': _safe_int(p.get('defenseSackUa')),
+            'def_sack_a':  _safe_int(p.get('defenseSackA')),
+            'def_sack_yds': abs(_safe_int(p.get('defenseSackWinLossYards'))),
+            'def_brup':    _safe_int(p.get('defensePassBrUp')),
+            'def_qbh':     _safe_int(p.get('defenseQbh')),
+            'def_ff':      _safe_int(p.get('defenseFumbForc')),
+            'def_fr':      _safe_int(p.get('defenseFumbRcvr')),
+            'def_blk':     _safe_int(p.get('defenseBlkdKick')),
+            'def_saf':     _safe_int(p.get('defenseSaf')),
+            'def_int_no':  _safe_int(p.get('returnsIntNo')),
+            'def_int_yds': _safe_int(p.get('returnsIntYards')),
+            'penalty_no':  _safe_int(p.get('penaltyNo')),
+            'penalty_yds': _safe_int(p.get('penaltyYards')),
+        }
+
+    def _team_view(t):
+        players = [_player_view(p) for p in (t.get('players') or []) if _participated(p)]
+        groups = {
+            'passing':   [p for p in players if p['pass_att']],
+            'rushing':   [p for p in players if p['rush_att']],
+            'receiving': [p for p in players if p['rec_no']],
+            'kicking':   [p for p in players if (p['fg_att'] or p['pat_kick_at'])],
+            'punting':   [p for p in players if p['punt_no']],
+            'kickoffs':  [p for p in players if p['ko_no']],
+            'kr':        [p for p in players if p['kr_no']],
+            'pr':        [p for p in players if p['pr_no']],
+            'ir':        [p for p in players if p['ir_no']],
+            'fr':        [p for p in players if p['fr_no']],
+            'fumbles':   [p for p in players if p['fumb_no']],
+            'defense':   [p for p in players if (
+                p['def_tack_ua'] + p['def_tack_a'] + p['def_sack_ua'] + p['def_sack_a']
+                + p['def_brup'] + p['def_qbh'] + p['def_ff'] + p['def_fr']
+                + p['def_int_no'] + p['def_blk'] + p['def_saf'] + p['def_tfl_ua'] + p['def_tfl_a']
+            )],
+        }
+        return {
+            'name':  t.get('customizedName') or t.get('name') or '',
+            'short': t.get('name') or '',
+            'abbr':  t.get('abbr') or '',
+            'record': t.get('record') or t.get('record_gen') or '0-0',
+            'conf_record': t.get('record_conf') or '0',
+            'totals': _team_totals(t),
+            'players': players,
+            'groups': groups,
+        }
+
+    vis = _team_view(vis_team)
+    home = _team_view(home_team)
+
+    # Scoring summary (rows)
+    scoring = []
+    for sc in (ev.get('scoring') or []):
+        passer = sc.get('passer')
+        scorer = sc.get('scorer')
+        pat_by = sc.get('patBy')
+        team_view = home if sc.get('homeTeam') else vis
+        scoring.append({
+            'qtr':   _safe_int(sc.get('quarter'), 0),
+            'clock': _mmss(_safe_int(sc.get('mins'), 0) * 60 + _safe_int(sc.get('secs'), 0)),
+            'how':   sc.get('how') or '',
+            'type':  sc.get('type') or '',
+            'yards': _safe_int(sc.get('yards'), 0),
+            'v_score': _safe_int(sc.get('visitorScore'), 0),
+            'h_score': _safe_int(sc.get('homeScore'), 0),
+            'home_team': bool(sc.get('homeTeam')),
+            'team_abbr': team_view['abbr'],
+            'team_name': team_view['short'] or team_view['name'],
+            'scorer': _uni_to_name(team_view, scorer),
+            'passer': _uni_to_name(team_view, passer),
+            'pat_by': _uni_to_name(team_view, pat_by),
+            'pat_type': _PAT_CODE_MAP.get(_safe_int(sc.get('patCode'), -1), ('', ''))[0],
+            'pat_res':  _PAT_CODE_MAP.get(_safe_int(sc.get('patCode'), -1), ('', ''))[1],
+            'drive_idx': _safe_int(sc.get('driveIdx'), 0),
+        })
+
+    drives = [_drive_view(d, vis, home, i + 1) for i, d in enumerate(ev.get('drives') or [])]
+
+    return {
+        'sport':         'football',
+        'sport_id':      0,
+        'game_id':       game.id,
+        'date':          ev.get('date') or _date_us(game.date),
+        'date_iso':      game.date or '',
+        'location':      ev.get('location') or game.location or '',
+        'start_time':    ev.get('timeStart') or game.start_time or '',
+        'attendance':    _safe_int(ev.get('attendance')),
+        'scorekeeper':   (ev.get('referees') or [''] * 9)[7] if (ev.get('referees') and len(ev.get('referees')) > 7) else (game.scorer or ''),
+        'referees':      ev.get('referees') or [],
+        'is_complete':   bool(game.is_complete),
+        'has_lineup':    bool(game.has_lineup),
+        'status_label':  game.status_label,
+        'nperiods':      nperiods,
+        'period_labels': [_qtr_label(i + 1) for i in range(nperiods)],
+        'linescore':     linescore,
+        'visitor':       vis,
+        'home':          home,
+        'visitor_score': vis_score,
+        'home_score':    home_score,
+        'starting_visitor': starting_visitor,
+        'scoring':       scoring,
+        'drives':        drives,
+        'rules': {
+            'periods':     int(ev.get('gamePeriods') or 4),
+            'minutes':     int(ev.get('minutesPrd') or 15),
+            'downs':       int(ev.get('downs') or 4),
+            'first_down_yards': int(ev.get('firstDownYards') or 10),
+            'pat_spot':    int(ev.get('patTrySpot') or 3),
+            'kickoff_spot': int(ev.get('kickoffSpot') or 35),
+            'tb_spot':     int(ev.get('touchBackSpot') or 25),
+            'saf_spot':    int(ev.get('safetySpot') or 20),
+            'field':       int(ev.get('fieldLength') or 100),
+        },
+        # The full blob is included so JSON consumers / debugging can drop a level.
+        '_raw': blob,
+    }
+
+
+def _uni_to_name(team_view, uniform):
+    if uniform in (None, '', -1, '-1'):
+        return ''
+    u = str(uniform)
+    for p in team_view.get('players', []):
+        if str(p.get('uni')) == u:
+            return p.get('name') or ''
+    return ''
+
+
+def _drive_view(d, vis, home, idx):
+    is_visitor = (d.get('awayTeam') is True) or (not d.get('awayTeam') and not d.get('homeTeam') and idx == 1) or (d.get('vh', '') == 'V')
+    # The blob's `awayTeam` field tracks "team away from goal" — not "visiting team".
+    # Use startSpot/endSpot ownership cues instead when in doubt; for our purposes,
+    # we just record which team possessed the drive based on the score row's owner.
+    return {
+        'idx':       idx,
+        'plays':     _safe_int(d.get('playsSum'), 0),
+        'plays_a':   _safe_int(d.get('playsA'), 0),
+        'plays_b':   _safe_int(d.get('playsB'), 0),
+        'start_qtr': _safe_int(d.get('startQuarter'), 0),
+        'end_qtr':   _safe_int(d.get('endQuarter'), 0),
+        'start_secs':_safe_int(d.get('startSecs'), 0),
+        'end_secs':  _safe_int(d.get('endSecs'), 0),
+        'start_spot':_safe_int(d.get('startSpot'), 0),
+        'end_spot':  _safe_int(d.get('endSpot'), 0),
+        'start_how': d.get('startHow') or '',
+        'end_how':   d.get('endHow') or '',
+        'yards':     _safe_int(d.get('yards'), 0),
+        'top':       _mmss(_safe_int(d.get('topSecs'), 0)),
+        'top_secs':  _safe_int(d.get('topSecs'), 0),
+        'red_zone':  bool(d.get('redZone')),
+    }
+
+
+# ── XML build ────────────────────────────────────────────────────────────
+
+def _set(elem, **kw):
+    """Set attributes in insertion order — ET preserves dict insertion since 3.8."""
+    for k, v in kw.items():
+        if v is None:
+            v = ''
+        elem.set(k, str(v))
+
+
+def build_xml(game):
+    """Build a Presto-format `<fbgame>` XML document from gwt_bs_blob."""
+    blob = _load_blob(game)
+    ev = blob.get('eventInfo') or {}
+    teams = blob.get('teams') or [{}, {}]
+    if len(teams) < 2:
+        teams = teams + [{}] * (2 - len(teams))
+    vis_t, home_t = teams[0] or {}, teams[1] or {}
+
+    # Build helper: compute team-level XML view
+    data = boxscore_data(game)
+    vis_view, home_view = data['visitor'], data['home']
+
+    root = ET.Element('fbgame')
+    _set(root, source='PrestoSports', version='7.16.0',
+         generated=_date.today().strftime('%m/%d/%Y'))
+
+    # ── <venue>/<officials>/<rules> ────────────────────────────────────
+    venue = ET.SubElement(root, 'venue')
+    _set(venue,
+         gameid='', visid=vis_view['abbr'], visname=vis_view['short'] or vis_view['name'],
+         homeid=home_view['abbr'], homename=home_view['short'] or home_view['name'],
+         date=ev.get('date') or _date_us(game.date),
+         location=ev.get('location') or game.location or '',
+         stadium=ev.get('arenaData', {}).get('stadium', '') if isinstance(ev.get('arenaData'), dict) else '',
+         start=ev.get('timeStart') or game.start_time or '',
+         end=ev.get('timeEnd') or '', duration=ev.get('duration') or '',
+         delay=ev.get('delayDuration') or '',
+         attend=str(_safe_int(ev.get('attendance'))),
+         schednote='',
+         leaguegame=('Y' if not ev.get('exhibition') else 'N'),
+         neutralgame=('Y' if ev.get('neutral') else 'N'),
+         postseason=('Y' if ev.get('postseason') else 'N'))
+
+    refs = ev.get('referees') or []
+    officials = ET.SubElement(venue, 'officials')
+    for slot, key in zip(range(9), ('ref', 'ump', 'line', 'lj', 'bj', 'fj', 'sj', 'sc', 'cj')):
+        officials.set(key, refs[slot] if slot < len(refs) else '')
+
+    rules = ET.SubElement(venue, 'rules')
+    _set(rules,
+         qtrs=str(int(ev.get('gamePeriods') or 4)),
+         mins=str(int(ev.get('minutesPrd') or 15)),
+         downs=str(int(ev.get('downs') or 4)),
+         yds=str(int(ev.get('firstDownYards') or 10)),
+         kospot=str(int(ev.get('kickoffSpot') or 35)),
+         kotbspot=str(int(ev.get('koFairCatchSpot') or 25)),
+         tbspot=str(int(ev.get('touchBackSpot') or 25)),
+         patspot=str(int(ev.get('patTrySpot') or 3)),
+         safspot=str(int(ev.get('safetySpot') or 20)),
+         td=str(int(ev.get('touchDown') or 6)),
+         fg=str(int(ev.get('fieldGoal') or 3)),
+         pat=str(int(ev.get('kickPat') or 1)),
+         patx=str(int(ev.get('otherPat') or 2)),
+         saf=str(int(ev.get('safety') or 2)),
+         defpat=str(int(ev.get('defPat') or 2)),
+         rouge=str(int(ev.get('rouge') or 1)),
+         field=str(int(ev.get('fieldLength') or 100)),
+         toh=str(int(ev.get('toHalf') or 3)),
+         sackrush=('Y' if ev.get('sackRush') else 'N'),
+         fgaplay=('Y' if ev.get('fgaDrvPlay') else 'N'),
+         netpunttb=('Y' if ev.get('otherTouchBack') else 'N'))
+
+    # ── <status> ───────────────────────────────────────────────────────
+    status = ET.SubElement(root, 'status')
+    _set(status,
+         complete='Y' if game.is_complete else 'N',
+         running=('F' if game.is_complete else 'T'),
+         period=str(int(ev.get('statusPeriod') or data['nperiods'] or 4)),
+         clock=_mmss(_safe_int(ev.get('statusMinutes')) * 60 + _safe_int(ev.get('statusSeconds'))))
+
+    # ── two <team> blocks (V, H) ───────────────────────────────────────
+    def _emit_team(team_view, raw_team, vh):
+        team = ET.SubElement(root, 'team')
+        _set(team,
+             vh=vh, code=team_view['short'] or team_view['name'], id=team_view['abbr'],
+             name=team_view['short'] or team_view['name'],
+             record=str(raw_team.get('record_gen') or raw_team.get('record') or '0-0'),
+             **{'conf-record': str(raw_team.get('record_conf') or '0')},
+             abb=(raw_team.get('keyStroke') or (team_view['short'] or 'X')[:1]))
+
+        periods = raw_team.get('periodstats') or []
+        score_total = sum(_safe_int(p.get('score')) for p in periods if _safe_int(p.get('score')) != 99)
+        line_vals = [
+            ('X' if _safe_int(p.get('score')) == 99 else str(_safe_int(p.get('score'))))
+            for p in periods
+        ]
+        linescore = ET.SubElement(team, 'linescore')
+        _set(linescore, prds=str(len(periods)), line=','.join(line_vals), score=str(score_total))
+        for i, p in enumerate(periods):
+            sub = ET.SubElement(linescore, 'lineprd')
+            sc = _safe_int(p.get('score'))
+            _set(sub, prd=str(i + 1), score=('X' if sc == 99 else str(sc)))
+
+        T = team_view['totals']
+        totals = ET.SubElement(team, 'totals')
+        _set(totals,
+             totoff_plays=str(T['plays']),
+             totoff_yards=str(T['total_yds']),
+             totoff_avg=_div(T['total_yds'], T['plays'], 1))
+
+        _set(ET.SubElement(totals, 'firstdowns'),
+             no=str(T['first_downs']), rush=str(T['fd_rush']),
+             **{'pass': str(T['fd_pass'])}, penalty=str(T['fd_penalty']))
+        _set(ET.SubElement(totals, 'penalties'), no=str(T['pen_no']), yds=str(T['pen_yds']))
+        _set(ET.SubElement(totals, 'conversions'),
+             thirdconv=str(T['third_conv']), thirdatt=str(T['third_att']),
+             fourthconv=str(T['fourth_conv']), fourthatt=str(T['fourth_att']))
+        _set(ET.SubElement(totals, 'fumbles'), no=str(T['fumb_no']), lost=str(T['fumb_lost']))
+        _set(ET.SubElement(totals, 'misc'), top=T['top'], ona='0', onm='0', yds='0')
+        _set(ET.SubElement(totals, 'redzone'),
+             att=str(T['rz_att']), scores=str(T['rz_scores']), points=str(T['rz_points']),
+             tdrush=str(T['rz_td_rush']), tdpass=str(T['rz_td_pass']),
+             fgmade=str(T['rz_fg']), endfga=str(T['rz_end_fga']),
+             enddowns=str(T['rz_end_dn']), endint=str(T['rz_end_int']),
+             endfumb=str(T['rz_end_fumb']), endhalf=str(T['rz_end_half']),
+             endgame=str(T['rz_end_game']))
+        _set(ET.SubElement(totals, 'rush'),
+             att=str(T['rush_att']), td='0', long=str(T['rush_yds'] if False else _safe_int(raw_team.get('rushLong'))),
+             loss=str(T['rush_loss']), yds=str(T['rush_yds']), gain=str(T['rush_gain']))
+        _set(ET.SubElement(totals, 'pass'),
+             att=str(T['pass_att']), td=str(T['pass_td']),
+             long=str(_safe_int(raw_team.get('passLong'))),
+             yds=str(T['pass_yds']), comp=str(T['pass_comp']),
+             sacks=str(T['pass_sacks']), sackyds=str(T['pass_sack_yds']),
+             **{'int': str(T['pass_int'])})
+        _set(ET.SubElement(totals, 'rcv'),
+             long=str(_safe_int(raw_team.get('receivingLong'))),
+             no=str(_safe_int(raw_team.get('receivingNo'))),
+             td=str(_safe_int(raw_team.get('receivingTd'))),
+             yds=str(_safe_int(raw_team.get('receivingYards'))))
+        _set(ET.SubElement(totals, 'punt'),
+             avg=_div(T['punt_yds'], T['punt_no'], 1), blkd='0',
+             fc=str(_safe_int(raw_team.get('kickPuntFc'))),
+             inside20=str(T['punt_i20']), long=str(T['punt_long']),
+             no=str(T['punt_no']), plus50=str(T['punt_50']),
+             tb=str(T['punt_tb']), yds=str(T['punt_yds']))
+        _set(ET.SubElement(totals, 'ko'),
+             no=str(T['ko_no']), ob=str(T['ko_ob']),
+             tb=str(T['ko_tb']), yds=str(T['ko_yds']))
+        if T['fg_att']:
+            _set(ET.SubElement(totals, 'fg'),
+                 att=str(T['fg_att']), blkd=str(T['fg_blk']),
+                 long=str(T['fg_long']), made=str(T['fg_made']))
+        _set(ET.SubElement(totals, 'pat'),
+             kickatt=str(T['pat_kick_at']), kickmade=str(T['pat_kick_md']),
+             passatt=str(T['pat_pass_at']), passmade=str(T['pat_pass_md']),
+             rcvmade=str(T['pat_rcv_md']),
+             rushmade=str(T['pat_rush_md']))
+        _set(ET.SubElement(totals, 'defense'),
+             brup=str(T['def_brup']), ff=str(T['def_fumb_forc']),
+             fr=str(T['def_fumb_rcvr']),
+             fryds=str(_safe_int(raw_team.get('returnsFumbYards'))),
+             sacks=str(T['def_sack_ua'] + T['def_sack_a']),
+             sackyds=str(T['def_sack_yds']),
+             sacksa=str(T['def_sack_a']), sacksua=str(T['def_sack_ua']),
+             tacka=str(T['def_tack_a']), tackua=str(T['def_tack_ua']),
+             tot_tack=str(T['def_tack_a'] + T['def_tack_ua']),
+             tflua=str(T['def_tfl_ua']), tflyds=str(T['def_tfl_yds']))
+        if T['kr_no']:
+            _set(ET.SubElement(totals, 'kr'),
+                 long=str(T['kr_long']), no=str(T['kr_no']),
+                 td=str(T['kr_td']), yds=str(T['kr_yds']))
+        if T['pr_no']:
+            _set(ET.SubElement(totals, 'pr'),
+                 long=str(T['pr_long']), no=str(T['pr_no']),
+                 td=str(T['pr_td']), yds=str(T['pr_yds']))
+        if T['fr_no']:
+            _set(ET.SubElement(totals, 'fr'),
+                 long=str(T['fr_long']), no=str(T['fr_no']),
+                 td=str(T['fr_td']), yds=str(T['fr_yds']))
+        if T['ir_no']:
+            _set(ET.SubElement(totals, 'ir'),
+                 long=str(T['ir_long']), no=str(T['ir_no']),
+                 td=str(T['ir_td']), yds=str(T['ir_yds']))
+        # <scoring> summary at team level (counts only)
+        sc = ET.SubElement(totals, 'scoring')
+        _set(sc,
+             td=str(_safe_int(raw_team.get('rushTd')) + _safe_int(raw_team.get('passTd'))
+                    + _safe_int(raw_team.get('returnsKickTd')) + _safe_int(raw_team.get('returnsPuntTd'))
+                    + _safe_int(raw_team.get('returnsFumbTd')) + _safe_int(raw_team.get('returnsIntTd'))),
+             patkick=str(T['pat_kick_md']),
+             patrcv=str(T['pat_rcv_md']))
+        if T['fg_made']:
+            sc.set('fg', str(T['fg_made']))
+        if T['pat_pass_md']:
+            sc.set('patpass', str(T['pat_pass_md']))
+        if T['pat_rush_md']:
+            sc.set('patrush', str(T['pat_rush_md']))
+
+        # ── per-player rows ─────────────────────────────────────────
+        for raw_p, view_p in zip(raw_team.get('players') or [], (raw_team.get('players') or [])):
+            if not view_p:
+                continue
+            # Note: player loop uses raw players (we have the same source for view+raw).
+            pass
+        for p in (raw_team.get('players') or []):
+            # We only emit participants — same logic as boxscore_data
+            participated = bool(p.get('participated')) or any(
+                _safe_int(p.get(k)) for k in
+                ('rushAtt', 'passAtt', 'receivingNo', 'kickKoNo', 'kickPuntNo',
+                 'returnsKickNo', 'returnsPuntNo', 'returnsIntNo', 'returnsFumbNo',
+                 'defenseTackUa', 'defenseTackA', 'defenseTflUa', 'defenseTflA',
+                 'defensePassBrUp', 'defenseSackUa', 'defenseSackA', 'defenseQbh',
+                 'defenseFumbForc', 'defenseFumbRcvr', 'defenseSaf', 'defenseBlkdKick',
+                 'kickFgAtt', 'epOffKickAt', 'epOffPassAt', 'epOffRushAt'))
+            pl = ET.SubElement(team, 'player')
+            uni = p.get('uniform') if p.get('uniform') is not None else ''
+            name = p.get('completeName') or ''
+            cn = _checkname(name)
+            _set(pl,
+                 uni=str(uni), name=name[:15], checkname=cn,
+                 shortname=(name[:15] or name),
+                 gp=('1' if participated else '0'),
+                 code=str(p.get('readOrder') if p.get('readOrder') is not None else uni),
+                 playerId=str(p.get('playerId') or ''))
+            _emit_player_stats(pl, p)
+        return team
+
+    _emit_team(vis_view, vis_t, 'V')
+    _emit_team(home_view, home_t, 'H')
+
+    # ── <scores> ───────────────────────────────────────────────────────
+    scores = ET.SubElement(root, 'scores')
+    drives_list = ev.get('drives') or []
+    for sc in (ev.get('scoring') or []):
+        s = ET.SubElement(scores, 'score')
+        team_view = home_view if sc.get('homeTeam') else vis_view
+        oppo_view = vis_view if sc.get('homeTeam') else home_view
+        pat_type, pat_res = _PAT_CODE_MAP.get(_safe_int(sc.get('patCode'), -1), ('', ''))
+        scorer = _uni_to_name(team_view, sc.get('scorer'))
+        passer = _uni_to_name(team_view, sc.get('passer'))
+        pat_by = _uni_to_name(team_view, sc.get('patBy'))
+        attrs = {
+            'how':   sc.get('how') or '',
+            'patby': pat_by,
+            'qtr':   str(_safe_int(sc.get('quarter'))),
+            'team':  team_view['abbr'],
+            'scorer': scorer,
+            'vh':    'H' if sc.get('homeTeam') else 'V',
+            'type':  sc.get('type') or '',
+            'clock': _mmss(_safe_int(sc.get('mins')) * 60 + _safe_int(sc.get('secs'))),
+            'driveindex': str(_safe_int(sc.get('driveIdx'))),
+            'hscore': str(_safe_int(sc.get('homeScore'))),
+            'vscore': str(_safe_int(sc.get('visitorScore'))),
+            'yds':   str(_safe_int(sc.get('yards'))),
+        }
+        if passer:
+            attrs['passer'] = passer
+        # Pull drive top/plays
+        idx = _safe_int(sc.get('driveIdx'))
+        if 0 < idx <= len(drives_list):
+            d = drives_list[idx - 1]
+            attrs['top']   = _mmss(_safe_int(d.get('topSecs')))
+            attrs['plays'] = str(_safe_int(d.get('playsSum')))
+            attrs['drive'] = str(_safe_int(d.get('yards')))
+        if pat_res and (sc.get('type') or '').upper() == 'TD':
+            attrs['patres']  = pat_res
+            attrs['pattype'] = pat_type
+        for k, v in attrs.items():
+            s.set(k, v)
+
+    # ── <fgas> ─────────────────────────────────────────────────────────
+    fgas = ET.SubElement(root, 'fgas')
+    for sc in (ev.get('scoring') or []):
+        if (sc.get('type') or '').upper() != 'FG':
+            continue
+        team_view = home_view if sc.get('homeTeam') else vis_view
+        f = ET.SubElement(fgas, 'fga')
+        _set(f,
+             distance=str(_safe_int(sc.get('yards'))),
+             clock=_mmss(_safe_int(sc.get('mins')) * 60 + _safe_int(sc.get('secs'))),
+             qtr=str(_safe_int(sc.get('quarter'))),
+             result='good',
+             team=team_view['abbr'],
+             vh=('H' if sc.get('homeTeam') else 'V'),
+             kicker=_uni_to_name(team_view, sc.get('scorer')))
+
+    # ── <drives> ───────────────────────────────────────────────────────
+    drives = ET.SubElement(root, 'drives')
+    for i, d in enumerate(drives_list):
+        dv = ET.SubElement(drives, 'drive')
+        _set(dv,
+             driveindex=str(i + 1),
+             vh='', yards=str(_safe_int(d.get('yards'))),
+             top=_mmss(_safe_int(d.get('topSecs'))),
+             end=(f"{d.get('endHow') or ''},{_safe_int(d.get('endQuarter'))},"
+                  f"{_mmss(_safe_int(d.get('endSecs')))},{_safe_int(d.get('endSpot'))}"),
+             end_how=d.get('endHow') or '',
+             end_qtr=str(_safe_int(d.get('endQuarter'))),
+             end_time=_mmss(_safe_int(d.get('endSecs'))),
+             end_spot=str(_safe_int(d.get('endSpot'))),
+             start=(f"{d.get('startHow') or ''},{_safe_int(d.get('startQuarter'))},"
+                    f"{_mmss(_safe_int(d.get('startSecs')))},{_safe_int(d.get('startSpot'))}"),
+             start_how=d.get('startHow') or '',
+             start_qtr=str(_safe_int(d.get('startQuarter'))),
+             start_time=_mmss(_safe_int(d.get('startSecs'))),
+             start_spot=str(_safe_int(d.get('startSpot'))),
+             plays=str(_safe_int(d.get('playsSum'))),
+             team='')
+        if d.get('redZone'):
+            dv.set('rz', '1')
+
+    # ── <plays> ────────────────────────────────────────────────────────
+    plays_el = ET.SubElement(root, 'plays')
+    plays_el.set('format', 'summary')
+
+    # ── <message> ──────────────────────────────────────────────────────
+    msg = ET.SubElement(root, 'message')
+    msg.set('text', (ev.get('notes') or ''))
+
+    # ── DNP roster (players with gp=0) ─────────────────────────────────
+    for raw_team, view, vh in ((vis_t, vis_view, 'V'), (home_t, home_view, 'H')):
+        dnp_players = [
+            p for p in (raw_team.get('players') or [])
+            if not bool(p.get('participated')) and not any(
+                _safe_int(p.get(k)) for k in
+                ('rushAtt', 'passAtt', 'receivingNo', 'kickKoNo', 'kickPuntNo',
+                 'returnsKickNo', 'returnsPuntNo', 'returnsIntNo', 'returnsFumbNo',
+                 'defenseTackUa', 'defenseTackA', 'defenseTflUa', 'defenseTflA',
+                 'defensePassBrUp', 'defenseSackUa', 'defenseSackA', 'defenseQbh',
+                 'defenseFumbForc', 'defenseFumbRcvr', 'defenseSaf', 'defenseBlkdKick',
+                 'kickFgAtt', 'epOffKickAt', 'epOffPassAt', 'epOffRushAt'))
+        ]
+        if not dnp_players:
+            continue
+        dnp_el = ET.SubElement(root, 'dnp')
+        _set(dnp_el, id=view['abbr'], vh=vh)
+        for p in dnp_players:
+            name = p.get('completeName') or ''
+            pl = ET.SubElement(dnp_el, 'player')
+            _set(pl,
+                 checkname=_checkname(name),
+                 code=str(p.get('readOrder') if p.get('readOrder') is not None else _safe_int(p.get('uniform'))),
+                 name=name[:15], uni=str(p.get('uniform') or ''), gp='0')
+
+    _indent(root)
+    xml_bytes = ET.tostring(root, encoding='unicode', xml_declaration=False)
+    xml_bytes = re.sub(r'<([a-zA-Z0-9_]+)([^>]*?)\s*/>', r'<\1\2></\1>', xml_bytes)
+    return '<?xml version="1.0" encoding="UTF-8"?>\n\n' + xml_bytes
+
+
+def _emit_player_stats(pl, p):
+    """Emit a player's per-category stat children inside <player>."""
+    pa  = _safe_int(p.get('passAtt'))
+    rcv = _safe_int(p.get('receivingNo'))
+    ra  = _safe_int(p.get('rushAtt'))
+    if ra:
+        rl = _safe_int(p.get('rushWinLoss'))
+        ry = _safe_int(p.get('rushYards'))
+        _set(ET.SubElement(pl, 'rush'),
+             att=str(ra), td=str(_safe_int(p.get('rushTd'))),
+             long=str(_safe_int(p.get('rushLong'))), loss=str(abs(rl)),
+             yds=str(ry), gain=str(ry - rl))
+    if pa:
+        _set(ET.SubElement(pl, 'pass'),
+             att=str(pa), td=str(_safe_int(p.get('passTd'))),
+             long=str(_safe_int(p.get('passLong'))),
+             yds=str(_safe_int(p.get('passYards'))),
+             comp=str(_safe_int(p.get('passComp'))),
+             sacks=str(_safe_int(p.get('passSacks'))),
+             sackyds=str(_safe_int(p.get('passSackYards'))),
+             **{'int': str(_safe_int(p.get('passInt')))})
+    if rcv:
+        _set(ET.SubElement(pl, 'rcv'),
+             long=str(_safe_int(p.get('receivingLong'))),
+             no=str(rcv), td=str(_safe_int(p.get('receivingTd'))),
+             yds=str(_safe_int(p.get('receivingYards'))))
+    if _safe_int(p.get('kickPuntNo')):
+        _set(ET.SubElement(pl, 'punt'),
+             avg=f"{_punt_avg(p.get('kickPuntAvg')):.1f}",
+             blkd=str(_safe_int(p.get('kickPuntBlkd'))),
+             fc=str(_safe_int(p.get('kickPuntFc'))),
+             inside20=str(_safe_int(p.get('kickPuntI20'))),
+             long=str(_safe_int(p.get('kickPuntLong'))),
+             no=str(_safe_int(p.get('kickPuntNo'))),
+             plus50=str(_safe_int(p.get('kickPunt50'))),
+             tb=str(_safe_int(p.get('kickPuntTb'))),
+             yds=str(_safe_int(p.get('kickPuntYards'))))
+    if _safe_int(p.get('kickKoNo')):
+        _set(ET.SubElement(pl, 'ko'),
+             no=str(_safe_int(p.get('kickKoNo'))),
+             ob=str(_safe_int(p.get('kickKoOb'))),
+             tb=str(_safe_int(p.get('kickKoTb'))),
+             yds=str(_safe_int(p.get('kickKoYards'))))
+    if _safe_int(p.get('kickFgAtt')) or _safe_int(p.get('kickFgMad')):
+        _set(ET.SubElement(pl, 'fg'),
+             att=str(_safe_int(p.get('kickFgAtt'))),
+             blkd=str(_safe_int(p.get('kickFgBlk'))),
+             long=str(_safe_int(p.get('kickFgLong'))),
+             made=str(_safe_int(p.get('kickFgMad'))))
+    if any(_safe_int(p.get(k)) for k in
+           ('epOffKickAt', 'epOffPassAt', 'epOffRushAt', 'epOffRcvMd',
+            'epOffKickMd', 'epOffPassMd', 'epOffRushMd')):
+        _set(ET.SubElement(pl, 'pat'),
+             kickatt=str(_safe_int(p.get('epOffKickAt'))),
+             kickmade=str(_safe_int(p.get('epOffKickMd'))),
+             passatt=str(_safe_int(p.get('epOffPassAt'))),
+             passmade=str(_safe_int(p.get('epOffPassMd'))),
+             rcvmade=str(_safe_int(p.get('epOffRcvMd'))),
+             retfatt='0', retfmade='0', retkatt='0', retkmade='0',
+             rushatt=str(_safe_int(p.get('epOffRushAt'))),
+             rushmade=str(_safe_int(p.get('epOffRushMd'))))
+    if any(_safe_int(p.get(k)) for k in
+           ('defenseTackUa', 'defenseTackA', 'defenseTflUa', 'defenseTflA',
+            'defensePassBrUp', 'defenseSackUa', 'defenseSackA', 'defenseQbh',
+            'defenseFumbForc', 'defenseFumbRcvr', 'defenseSaf', 'defenseBlkdKick')):
+        attrs = {}
+        for x_attr, src_key in (
+            ('brup', 'defensePassBrUp'),
+            ('ff',   'defenseFumbForc'),
+            ('fr',   'defenseFumbRcvr'),
+            ('qbh',  'defenseQbh'),
+            ('sacka',  'defenseSackA'),
+            ('sackua', 'defenseSackUa'),
+            ('tacka',  'defenseTackA'),
+            ('tackua', 'defenseTackUa'),
+            ('tfla',   'defenseTflA'),
+            ('tflua',  'defenseTflUa'),
+        ):
+            v = _safe_int(p.get(src_key))
+            if v:
+                attrs[x_attr] = str(v)
+        if _safe_int(p.get('defenseTackA')) + _safe_int(p.get('defenseTackUa')):
+            attrs['tot_tack'] = str(_safe_int(p.get('defenseTackA')) + _safe_int(p.get('defenseTackUa')))
+        if _safe_int(p.get('defenseSackWinLossYards')):
+            attrs['sackyds'] = str(abs(_safe_int(p.get('defenseSackWinLossYards'))))
+        if _safe_int(p.get('defenseTflLossYards')):
+            attrs['tflyds']  = str(abs(_safe_int(p.get('defenseTflLossYards'))))
+        if _safe_int(p.get('returnsFumbYards')):
+            attrs['fryds']   = str(_safe_int(p.get('returnsFumbYards')))
+        d = ET.SubElement(pl, 'defense')
+        for k, v in attrs.items():
+            d.set(k, v)
+    if _safe_int(p.get('returnsKickNo')):
+        _set(ET.SubElement(pl, 'kr'),
+             long=str(_safe_int(p.get('returnsKickLong'))),
+             no=str(_safe_int(p.get('returnsKickNo'))),
+             td=str(_safe_int(p.get('returnsKickTd'))),
+             yds=str(_safe_int(p.get('returnsKickYards'))))
+    if _safe_int(p.get('returnsPuntNo')):
+        _set(ET.SubElement(pl, 'pr'),
+             long=str(_safe_int(p.get('returnsPuntLong'))),
+             no=str(_safe_int(p.get('returnsPuntNo'))),
+             td=str(_safe_int(p.get('returnsPuntTd'))),
+             yds=str(_safe_int(p.get('returnsPuntYards'))))
+    if _safe_int(p.get('returnsIntNo')):
+        _set(ET.SubElement(pl, 'ir'),
+             long=str(_safe_int(p.get('returnsIntLong'))),
+             no=str(_safe_int(p.get('returnsIntNo'))),
+             td=str(_safe_int(p.get('returnsIntTd'))),
+             yds=str(_safe_int(p.get('returnsIntYards'))))
+    if _safe_int(p.get('returnsFumbNo')):
+        _set(ET.SubElement(pl, 'fr'),
+             long=str(_safe_int(p.get('returnsFumbLong'))),
+             no=str(_safe_int(p.get('returnsFumbNo'))),
+             td=str(_safe_int(p.get('returnsFumbTd'))),
+             yds=str(_safe_int(p.get('returnsFumbYards'))))
+    if _safe_int(p.get('fumblesNo')):
+        _set(ET.SubElement(pl, 'fumbles'),
+             no=str(_safe_int(p.get('fumblesNo'))),
+             lost=str(_safe_int(p.get('fumblesLost'))))
+    # Scoring (per-player TDs / PATs)
+    sc_attrs = {}
+    td = sum(_safe_int(p.get(k)) for k in
+             ('rushTd', 'passTd', 'receivingTd',
+              'returnsKickTd', 'returnsPuntTd', 'returnsFumbTd', 'returnsIntTd'))
+    if td:
+        sc_attrs['td'] = str(td)
+    if _safe_int(p.get('epOffKickMd')):
+        sc_attrs['patkick'] = str(_safe_int(p.get('epOffKickMd')))
+    if _safe_int(p.get('epOffPassMd')):
+        sc_attrs['patpass'] = str(_safe_int(p.get('epOffPassMd')))
+    if _safe_int(p.get('epOffRushMd')):
+        sc_attrs['patrush'] = str(_safe_int(p.get('epOffRushMd')))
+    if _safe_int(p.get('epOffRcvMd')):
+        sc_attrs['patrcv']  = str(_safe_int(p.get('epOffRcvMd')))
+    if _safe_int(p.get('kickFgMad')):
+        sc_attrs['fg']      = str(_safe_int(p.get('kickFgMad')))
+    if sc_attrs:
+        sc = ET.SubElement(pl, 'scoring')
+        for k, v in sc_attrs.items():
+            sc.set(k, v)
+
+
+def _checkname(name):
+    """Convert 'First Last' → 'LAST,FIRST' truncated to Presto's 15-char field."""
+    if not name:
+        return ''
+    parts = [s for s in name.strip().split() if s]
+    if len(parts) == 1:
+        return parts[0].upper()[:15]
+    last = parts[-1].upper()
+    first = ' '.join(parts[:-1]).upper()
+    return f'{last},{first}'[:15]
+
+
+def _indent(elem, level=0):
+    """Two-space indent for readability (matches Presto export)."""
+    i = '\n' + level * '  '
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + '  '
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for child in elem:
+            _indent(child, level + 1)
+        if not child.tail or not child.tail.strip():
+            child.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
+
+
+# ── Sport façade ─────────────────────────────────────────────────────────
+
+class FootballSport(Sport):
+    sport_id = 0
+    name = 'Football'
+
+    def status_options(self):
+        # Mirrors app.routes._football_status_options() so the registry stays
+        # the single source of truth as more sports are added.
+        return [
+            {'value': '1', 'label': '1st Quarter'},
+            {'value': '2', 'label': '2nd Quarter'},
+            {'value': '3', 'label': 'Halftime'},
+            {'value': '4', 'label': '3rd Quarter'},
+            {'value': '5', 'label': '4th Quarter'},
+            {'value': '6', 'label': 'End of Regulation'},
+            {'value': '7', 'label': 'Overtime'},
+            {'value': '8', 'label': 'Final'},
+            {'value': '9', 'label': 'Final - OT'},
+        ]
+
+    def boxscore_data(self, game):
+        return boxscore_data(game)
+
+    def build_xml(self, game):
+        return build_xml(game)
+
+    def render_html(self, game, **ctx):
+        data = self.boxscore_data(game)
+        return render_template('football_boxscore.html', game=game, data=data, **ctx)
+
+    def render_pdf(self, game, style='full', **ctx):
+        data = self.boxscore_data(game)
+        style = (style or 'full').lower()
+        if style == 'summary':
+            return render_template('football_pdf_summary.html', game=game, data=data, **ctx)
+        if style == 'pbp':
+            try:
+                qtr = int(request.args.get('qtr', '1'))
+            except Exception:
+                qtr = 1
+            return render_template('football_pdf_pbp.html', game=game, data=data, qtr=qtr, **ctx)
+        return render_template('football_pdf_full.html', game=game, data=data, **ctx)
+
+    def persist_save(self, game, bs, statuscode=-2, live_stats_raw=''):
+        # Football lives entirely in gwt_bs_blob — store it, sync the line
+        # score off `periodstats`, and leave the diamond-only tables alone.
+        super().persist_save(game, bs, statuscode=statuscode, live_stats_raw=live_stats_raw)

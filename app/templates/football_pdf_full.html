@@ -1,0 +1,144 @@
+{% import "_football_macros.html" as fb %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ data.visitor.short }} vs. {{ data.home.short }} — Football Boxscore</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color:#222; margin:18px; background:#fff; }
+  h1 { font-size: 16px; margin:0 0 4px; text-align:center; }
+  p.sub { text-align:center; color:#666; font-size:11px; margin:0 0 14px; }
+
+  .scoreheader { display:flex; justify-content:center; align-items:center; gap:30px; margin-bottom:10px; }
+  .scoreheader .blk { text-align:center; }
+  .scoreheader .blk .nm { font-weight:700; font-size:13px; }
+  .scoreheader .blk .sc { font-size:36px; font-weight:700; line-height:1; }
+
+  h2.section { font-size: 13px; border-bottom: 2px solid #333; margin: 14px 0 8px; padding-bottom:3px; text-transform:uppercase; letter-spacing:.5px; }
+  h3.team-section { font-size:12px; margin:10px 0 4px; color:#333; text-transform:uppercase; letter-spacing:.5px; }
+
+  .print-bar { text-align:center; margin-bottom:14px; }
+  .print-bar button { padding:6px 16px; background:#333; color:#fff; border:none; cursor:pointer; font-size:12px; border-radius:3px; }
+  .print-bar a { margin-left:8px; font-size:11px; }
+
+  table { width:100%; border-collapse:collapse; font-size:11px; }
+  table th, table td { padding:3px 5px; }
+
+  table.linescore { margin-bottom:16px; }
+  table.linescore th, table.linescore td { border:1px solid #ccc; text-align:center; }
+  table.linescore th.text, table.linescore td.text { text-align:left; }
+  table.linescore thead th { background:#444; color:#fff; font-weight:600; }
+  table.linescore .total { font-weight:700; background:#f5f5f5; }
+  table.linescore .winner td, table.linescore .winner th { font-weight:700; }
+  table.linescore .loser  td, table.linescore .loser th  { color:#777; }
+
+  table.team-stats { margin-bottom:14px; }
+  table.team-stats th, table.team-stats td { border-bottom:1px solid #eee; }
+  table.team-stats th { background:#444; color:#fff; }
+  table.team-stats td:nth-child(1), table.team-stats td:nth-child(3) { width:25%; text-align:center; font-weight:600; }
+  table.team-stats td:nth-child(2) { text-align:center; color:#444; }
+
+  table.scoring th, table.scoring td { border:1px solid #ccc; padding:4px 6px; }
+  table.scoring thead th { background:#444; color:#fff; }
+
+  .two-col { display:flex; gap:20px; margin-bottom:12px; }
+  .two-col > div { flex:1; min-width:0; }
+
+  table.ind { margin-bottom:8px; }
+  table.ind caption { text-align:left; font-size:12px; font-weight:700; margin:8px 0 3px; color:#222; text-transform:uppercase; }
+  table.ind th, table.ind td { border-bottom:1px solid #eaeaea; text-align:center; padding:2px 4px; }
+  table.ind th.text, table.ind td.text { text-align:left; }
+  table.ind thead th { background:#666; color:#fff; }
+
+  table.pbp { font-size:10px; }
+  table.pbp th { background:#444; color:#fff; padding:3px 5px; text-align:left; }
+  table.pbp td { padding:2px 5px; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+  table.pbp .at { width:170px; color:#444; }
+  table.pbp .qtr-head td { background:#1a1a2e; color:#fff; font-weight:700; padding:6px 8px; text-transform:uppercase; }
+  table.pbp .drv-head td { background:#f5f5f5; font-weight:600; }
+  table.pbp .drv-summary td { color:#555; font-style:italic; padding-top:0; }
+
+  .page-break { page-break-before: always; }
+
+  @media print {
+    .print-bar { display:none; }
+    body { margin:10px; }
+    h2.section { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-bar">
+  <button onclick="window.print()">Print / Save as PDF</button>
+  <a href="?style=summary">Switch to summary</a>
+  <a href="?style=pbp&qtr=1">Switch to PBP</a>
+</div>
+
+<h1>Football Box Score{% if data.is_complete %} (Final){% endif %}</h1>
+<p class="sub">{{ data.visitor.short or data.visitor.name }} vs. {{ data.home.short or data.home.name }}
+  &mdash; {{ data.date }}{% if data.location %} at {{ data.location }}{% endif %}</p>
+
+{# ── Score header ──────────────────────────────────────────────────── #}
+<div class="scoreheader">
+  <div class="blk"><div class="nm">{{ data.visitor.short or data.visitor.name }}</div>
+    <div class="sc">{{ data.visitor_score }}</div></div>
+  <div class="blk"><div class="nm">{{ data.home.short or data.home.name }}</div>
+    <div class="sc">{{ data.home_score }}</div></div>
+</div>
+
+{# ── Scoring summary section ───────────────────────────────────────── #}
+<h2 class="section">Scoring Summary</h2>
+{{ fb.linescore_table(data) }}
+{{ fb.scoring_summary(data) }}
+
+<div style="margin-top:14px; font-size:11px; color:#444;">
+  <strong>Location:</strong> {{ data.location or '—' }}<br>
+  <strong>Attendance:</strong> {{ data.attendance }}<br>
+  {% if data.scorekeeper %}<strong>Scorekeeper:</strong> {{ data.scorekeeper }}<br>{% endif %}
+  {% if data.start_time %}<strong>Start:</strong> {{ data.start_time }}<br>{% endif %}
+</div>
+
+{# ── Team statistics section ───────────────────────────────────────── #}
+<div class="page-break"></div>
+<h2 class="section">Team Statistics</h2>
+{{ fb.team_statistics(data) }}
+
+{# ── Individual statistics section ─────────────────────────────────── #}
+<div class="page-break"></div>
+<h2 class="section">Individual Statistics</h2>
+<div class="two-col">
+  <div>{{ fb.individual_stats(data.visitor, 'Visitor') }} {{ fb.fumbles_block(data.visitor) }}</div>
+  <div>{{ fb.individual_stats(data.home, 'Home') }} {{ fb.fumbles_block(data.home) }}</div>
+</div>
+
+{# ── Defensive section is already inside individual_stats; show drives ── #}
+{% if data.drives %}
+<div class="page-break"></div>
+<h2 class="section">Drive Chart</h2>
+<table class="ind">
+  <thead>
+    <tr><th>#</th><th>Plays</th><th>Yards</th><th>TOP</th>
+        <th>Start (Q/T/Spot)</th><th>End (Q/T/Spot)</th><th>Start How</th><th>End How</th><th>RZ</th></tr>
+  </thead>
+  <tbody>
+    {% for d in data.drives %}
+    <tr>
+      <td>{{ d.idx }}</td>
+      <td>{{ d.plays }}</td>
+      <td>{{ d.yards }}</td>
+      <td>{{ d.top }}</td>
+      <td>{{ d.start_qtr }} / {{ "%02d:%02d"|format((d.start_secs // 60), (d.start_secs % 60)) }} / {{ d.start_spot }}</td>
+      <td>{{ d.end_qtr }} / {{ "%02d:%02d"|format((d.end_secs // 60), (d.end_secs % 60)) }} / {{ d.end_spot }}</td>
+      <td>{{ d.start_how }}</td>
+      <td>{{ d.end_how }}</td>
+      <td>{% if d.red_zone %}Y{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+</body>
+</html>

@@ -1,0 +1,259 @@
+{# Shared Jinja macros used by the football live page and the three PDF layouts. #}
+
+{% macro linescore_table(d) %}
+<table class="linescore">
+  <thead>
+    <tr>
+      <th class="text"></th>
+      {% for cell in d.linescore %}<th>{{ cell.label }}</th>{% endfor %}
+      <th class="total">FINAL</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="{% if d.visitor_score > d.home_score %}winner{% else %}loser{% endif %}">
+      <td class="text">{{ d.visitor.short or d.visitor.name }} ({{ d.visitor.record }})</td>
+      {% for cell in d.linescore %}<td>{{ cell.v }}</td>{% endfor %}
+      <td class="total">{{ d.visitor_score }}</td>
+    </tr>
+    <tr class="{% if d.home_score > d.visitor_score %}winner{% else %}loser{% endif %}">
+      <td class="text">{{ d.home.short or d.home.name }} ({{ d.home.record }})</td>
+      {% for cell in d.linescore %}<td>{{ cell.h }}</td>{% endfor %}
+      <td class="total">{{ d.home_score }}</td>
+    </tr>
+  </tbody>
+</table>
+{% endmacro %}
+
+
+{% macro scoring_summary(d) %}
+{% if d.scoring %}
+<table class="scoring">
+  <thead>
+    <tr>
+      <th>PRD</th><th>TIME</th><th>SCORING SUMMARY</th><th>{{ d.visitor.abbr }} - {{ d.home.abbr }}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in d.scoring %}
+    <tr>
+      <td>{{ s.qtr }}</td>
+      <td>{{ s.clock }}</td>
+      <td>
+        <strong>{{ s.team_name or s.team_abbr }}</strong> &mdash;
+        {% if s.scorer %}{{ s.scorer }}{% endif %}
+        {% if s.type == 'TD' %}
+          {% if s.how == 'PASS' and s.passer %}, {{ s.passer }} pass complete for {{ s.yards }} yards{% endif %}
+          {% if s.how == 'RUSH' %}, {{ s.yards }} yd run{% endif %}
+          {% if s.how == 'FUMB' %}, {{ s.yards }} yd fumble return{% endif %}
+          {% if s.how == 'INT' %}, {{ s.yards }} yd interception return{% endif %}
+          {% if s.how == 'KICK' %}, kickoff return{% endif %}
+          , TOUCHDOWN
+          {% if s.pat_by %}({{ s.pat_by }} {{ (s.pat_type or 'kick')|lower }} {{ (s.pat_res or 'good')|lower }}){% endif %}
+        {% elif s.type == 'FG' %}
+          {{ s.yards }} yd field goal
+        {% elif s.type == 'SAF' %}
+          safety
+        {% endif %}
+      </td>
+      <td>{{ s.v_score }} - {{ s.h_score }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endmacro %}
+
+
+{% macro team_statistics(d) %}
+{% set V = d.visitor.totals %}
+{% set H = d.home.totals %}
+<table class="team-stats">
+  <thead>
+    <tr><th>{{ d.visitor.abbr }}</th><th>STATISTICS</th><th>{{ d.home.abbr }}</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>{{ V.first_downs }}</td><td>FIRST DOWNS</td><td>{{ H.first_downs }}</td></tr>
+    <tr><td>{{ V.fd_rush }}</td><td>&nbsp;&nbsp;Rushing</td><td>{{ H.fd_rush }}</td></tr>
+    <tr><td>{{ V.fd_pass }}</td><td>&nbsp;&nbsp;Passing</td><td>{{ H.fd_pass }}</td></tr>
+    <tr><td>{{ V.fd_penalty }}</td><td>&nbsp;&nbsp;Penalty</td><td>{{ H.fd_penalty }}</td></tr>
+    <tr><td>{{ V.rush_att }}-{{ V.rush_yds }}</td><td>RUSHES-YARDS</td><td>{{ H.rush_att }}-{{ H.rush_yds }}</td></tr>
+    <tr><td>{{ V.pass_yds }}</td><td>PASSING YARDS</td><td>{{ H.pass_yds }}</td></tr>
+    <tr><td>{{ V.pass_comp }}-{{ V.pass_att }}-{{ V.pass_int }}</td><td>PASS C-A-INT</td><td>{{ H.pass_comp }}-{{ H.pass_att }}-{{ H.pass_int }}</td></tr>
+    <tr><td>{{ V.plays }}-{{ V.total_yds }}</td><td>TOTAL OFFENSIVE PLAYS-YARDS</td><td>{{ H.plays }}-{{ H.total_yds }}</td></tr>
+    <tr><td>{{ V.punt_no }}-{{ "%.1f"|format(V.punt_avg) }}</td><td>PUNTS (NUMBER-AVG)</td><td>{{ H.punt_no }}-{{ "%.1f"|format(H.punt_avg) }}</td></tr>
+    <tr><td>{{ V.fumb_no }}-{{ V.fumb_lost }}</td><td>FUMBLES-LOST</td><td>{{ H.fumb_no }}-{{ H.fumb_lost }}</td></tr>
+    <tr><td>{{ V.pen_no }}-{{ V.pen_yds }}</td><td>PENALTIES-YARDS</td><td>{{ H.pen_no }}-{{ H.pen_yds }}</td></tr>
+    <tr><td>{{ V.top }}</td><td>TIME OF POSSESSION</td><td>{{ H.top }}</td></tr>
+    <tr>
+      <td>{% if V.third_att %}{{ "%.0f"|format(100 * V.third_conv / V.third_att) }}% ({{ V.third_conv }} of {{ V.third_att }}){% else %}0-0{% endif %}</td>
+      <td>THIRD DOWN EFFICIENCY</td>
+      <td>{% if H.third_att %}{{ "%.0f"|format(100 * H.third_conv / H.third_att) }}% ({{ H.third_conv }} of {{ H.third_att }}){% else %}0-0{% endif %}</td>
+    </tr>
+    <tr>
+      <td>{% if V.fourth_att %}{{ "%.0f"|format(100 * V.fourth_conv / V.fourth_att) }}% ({{ V.fourth_conv }} of {{ V.fourth_att }}){% else %}0-0{% endif %}</td>
+      <td>FOURTH DOWN EFFICIENCY</td>
+      <td>{% if H.fourth_att %}{{ "%.0f"|format(100 * H.fourth_conv / H.fourth_att) }}% ({{ H.fourth_conv }} of {{ H.fourth_att }}){% else %}0-0{% endif %}</td>
+    </tr>
+    <tr><td>{{ V.rz_scores }}-{{ V.rz_att }}</td><td>RED ZONE SCORES-CHANCES</td><td>{{ H.rz_scores }}-{{ H.rz_att }}</td></tr>
+  </tbody>
+</table>
+{% endmacro %}
+
+
+{% macro individual_stats(team, side) %}
+{% set G = team.groups %}
+<h3 class="team-section">{{ team.short or team.name }} ({{ side }})</h3>
+
+{% if G.passing %}
+<table class="ind">
+  <caption>Passing</caption>
+  <thead><tr><th class="text">Player</th><th>C-A</th><th>YDS</th><th>LG</th><th>TD</th><th>INT</th></tr></thead>
+  <tbody>
+    {% for p in G.passing %}
+    <tr><td class="text">{{ p.name }}</td>
+        <td>{{ p.pass_comp }}-{{ p.pass_att }}</td><td>{{ p.pass_yds }}</td>
+        <td>{{ p.pass_long }}</td><td>{{ p.pass_td }}</td><td>{{ p.pass_int }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.rushing %}
+<table class="ind">
+  <caption>Rushing</caption>
+  <thead><tr><th class="text">Player</th><th>ATT</th><th>YDS</th><th>AVG</th><th>LG</th><th>TD</th></tr></thead>
+  <tbody>
+    {% for p in G.rushing %}
+    <tr><td class="text">{{ p.name }}</td>
+        <td>{{ p.rush_att }}</td><td>{{ p.rush_yds }}</td>
+        <td>{{ "%.1f"|format(p.rush_avg) }}</td><td>{{ p.rush_long }}</td><td>{{ p.rush_td }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.receiving %}
+<table class="ind">
+  <caption>Receiving</caption>
+  <thead><tr><th class="text">Player</th><th>NO</th><th>YDS</th><th>AVG</th><th>LG</th><th>TD</th></tr></thead>
+  <tbody>
+    {% for p in G.receiving %}
+    <tr><td class="text">{{ p.name }}</td>
+        <td>{{ p.rec_no }}</td><td>{{ p.rec_yds }}</td>
+        <td>{{ "%.1f"|format(p.rec_avg) }}</td><td>{{ p.rec_long }}</td><td>{{ p.rec_td }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.kicking %}
+<table class="ind">
+  <caption>Kicking</caption>
+  <thead><tr><th class="text">Player</th><th>FG</th><th>LG</th><th>XP</th></tr></thead>
+  <tbody>
+    {% for p in G.kicking %}
+    <tr><td class="text">{{ p.name }}</td>
+        <td>{{ p.fg_made }}/{{ p.fg_att }}</td>
+        <td>{{ p.fg_long }}</td>
+        <td>{{ p.pat_kick_md }}/{{ p.pat_kick_at }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.punting %}
+<table class="ind">
+  <caption>Punting</caption>
+  <thead><tr><th class="text">Player</th><th>NO</th><th>YDS</th><th>AVG</th><th>LG</th><th>TB</th><th>IN 20</th></tr></thead>
+  <tbody>
+    {% for p in G.punting %}
+    <tr><td class="text">{{ p.name }}</td>
+        <td>{{ p.punt_no }}</td><td>{{ p.punt_yds }}</td>
+        <td>{{ "%.1f"|format(p.punt_avg) }}</td>
+        <td>{{ p.punt_long }}</td><td>{{ p.punt_tb }}</td><td>{{ p.punt_i20 }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.kickoffs %}
+<table class="ind">
+  <caption>Kickoffs</caption>
+  <thead><tr><th class="text">Player</th><th>NO</th><th>YDS</th><th>AVG</th><th>TB</th><th>OB</th></tr></thead>
+  <tbody>
+    {% for p in G.kickoffs %}
+    <tr><td class="text">{{ p.name }}</td>
+        <td>{{ p.ko_no }}</td><td>{{ p.ko_yds }}</td>
+        <td>{% if p.ko_no %}{{ "%.1f"|format(p.ko_yds / p.ko_no) }}{% else %}0.0{% endif %}</td>
+        <td>{{ p.ko_tb }}</td><td>{{ p.ko_ob }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.kr or G.pr %}
+<table class="ind">
+  <caption>Returns</caption>
+  <thead><tr><th class="text">Player</th><th>TYPE</th><th>NO</th><th>YDS</th><th>AVG</th><th>LG</th><th>TD</th></tr></thead>
+  <tbody>
+    {% for p in G.kr %}
+    <tr><td class="text">{{ p.name }}</td><td>KO</td>
+        <td>{{ p.kr_no }}</td><td>{{ p.kr_yds }}</td>
+        <td>{% if p.kr_no %}{{ "%.1f"|format(p.kr_yds / p.kr_no) }}{% else %}0.0{% endif %}</td>
+        <td>{{ p.kr_long }}</td><td>{{ p.kr_td }}</td></tr>
+    {% endfor %}
+    {% for p in G.pr %}
+    <tr><td class="text">{{ p.name }}</td><td>Punt</td>
+        <td>{{ p.pr_no }}</td><td>{{ p.pr_yds }}</td>
+        <td>{% if p.pr_no %}{{ "%.1f"|format(p.pr_yds / p.pr_no) }}{% else %}0.0{% endif %}</td>
+        <td>{{ p.pr_long }}</td><td>{{ p.pr_td }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if G.defense %}
+<table class="ind">
+  <caption>Defense</caption>
+  <thead>
+    <tr><th>#</th><th class="text">Player</th><th>SOLO</th><th>AST</th><th>TOTAL</th>
+        <th>SACKS-YDS</th><th>TFL-YDS</th><th>FF</th><th>FR-YDS</th>
+        <th>INT-YDS</th><th>BRUP</th><th>BLKS</th><th>QBH</th></tr>
+  </thead>
+  <tbody>
+    {% for p in G.defense %}
+    <tr>
+      <td>{{ p.uni }}</td>
+      <td class="text">{{ p.name }}</td>
+      <td>{{ p.def_tack_ua }}</td>
+      <td>{{ p.def_tack_a }}</td>
+      <td>{{ p.def_tack_ua + p.def_tack_a }}</td>
+      <td>{% if p.def_sack_ua + p.def_sack_a %}{{ p.def_sack_ua + p.def_sack_a }}-{{ p.def_sack_yds }}{% else %}—{% endif %}</td>
+      <td>{% if p.def_tfl_ua + p.def_tfl_a %}{{ p.def_tfl_ua + p.def_tfl_a }}-{{ p.def_tfl_yds }}{% else %}—{% endif %}</td>
+      <td>{{ p.def_ff or '—' }}</td>
+      <td>{% if p.def_fr or p.fr_no %}{{ (p.def_fr or p.fr_no) }}-{{ p.fr_yds }}{% else %}—{% endif %}</td>
+      <td>{% if p.def_int_no %}{{ p.def_int_no }}-{{ p.def_int_yds }}{% else %}—{% endif %}</td>
+      <td>{{ p.def_brup or '—' }}</td>
+      <td>{{ p.def_blk or '—' }}</td>
+      <td>{{ p.def_qbh or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endmacro %}
+
+
+{% macro fumbles_block(team) %}
+{% if team.groups.fumbles %}
+<table class="ind">
+  <caption>Fumbles</caption>
+  <thead><tr><th class="text">Player</th><th>NO</th><th>LOST</th></tr></thead>
+  <tbody>
+    {% for p in team.groups.fumbles %}
+    <tr><td class="text">{{ p.name }}</td><td>{{ p.fumb_no }}</td><td>{{ p.fumb_lost }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endmacro %}

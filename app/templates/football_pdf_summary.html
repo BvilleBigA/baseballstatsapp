@@ -1,0 +1,63 @@
+{% import "_football_macros.html" as fb %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ data.visitor.short }} vs. {{ data.home.short }} — Football Summary</title>
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; font-size:10px; color:#222; margin:14px; background:#fff; }
+  h1 { font-size:14px; text-align:center; margin:0 0 2px; }
+  p.sub { text-align:center; color:#555; font-size:10px; margin:0 0 8px; }
+
+  .print-bar { text-align:center; margin-bottom:10px; }
+  .print-bar button { padding:4px 14px; background:#333; color:#fff; border:none; cursor:pointer; font-size:11px; border-radius:3px; }
+  .print-bar a { margin-left:8px; font-size:10px; }
+
+  table { width:100%; border-collapse:collapse; font-size:10px; }
+  table th, table td { padding:2px 4px; }
+
+  table.scoring { margin-bottom:6px; }
+  table.scoring th, table.scoring td { border:1px solid #bbb; padding:3px 4px; }
+  table.scoring thead th { background:#333; color:#fff; font-weight:600; }
+
+  table.team-stats { margin-bottom:8px; }
+  table.team-stats th, table.team-stats td { border-bottom:1px solid #eee; }
+  table.team-stats th { background:#333; color:#fff; }
+  table.team-stats td:nth-child(1), table.team-stats td:nth-child(3) { width:25%; text-align:center; font-weight:600; }
+  table.team-stats td:nth-child(2) { text-align:center; }
+
+  .two-col { display:flex; gap:14px; }
+  .two-col > div { flex:1; min-width:0; }
+  table.ind caption { text-align:left; font-size:10px; font-weight:700; color:#333; text-transform:uppercase; margin-top:5px; }
+  table.ind th, table.ind td { border-bottom:1px solid #eee; text-align:center; padding:1px 3px; }
+  table.ind th.text, table.ind td.text { text-align:left; }
+  table.ind thead th { background:#555; color:#fff; }
+
+  @media print { .print-bar { display:none; } body { margin:8px; } }
+</style>
+</head>
+<body>
+
+<div class="print-bar">
+  <button onclick="window.print()">Print / Save as PDF</button>
+  <a href="?style=full">Full version</a>
+  <a href="?style=pbp&qtr=1">PBP</a>
+</div>
+
+<h1>{{ data.visitor.short or data.visitor.name }} ({{ data.visitor.record }}) vs.
+    {{ data.home.short or data.home.name }} ({{ data.home.record }})</h1>
+<p class="sub">{{ data.date }} {% if data.location %}&middot; {{ data.location }}{% endif %}
+  {% if data.attendance %}&middot; Attendance: {{ data.attendance }}{% endif %}</p>
+
+{{ fb.scoring_summary(data) }}
+
+<h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px;">Team Summary</h2>
+{{ fb.team_statistics(data) }}
+
+<div class="two-col">
+  <div>{{ fb.individual_stats(data.visitor, 'Visitor') }} {{ fb.fumbles_block(data.visitor) }}</div>
+  <div>{{ fb.individual_stats(data.home, 'Home') }} {{ fb.fumbles_block(data.home) }}</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+{% extends "team.html" %}
+{% block title %}Boxscore unavailable{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:60px auto;padding:24px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;font-family:'Open Sans',sans-serif;">
+  <h2 style="margin-top:0;">Boxscore not yet available for this sport</h2>
+  <p>This game's sport (sport_id <code>{{ sport_id }}</code>) is set up for live stat entry, but the visual boxscore renderer hasn't been wired up yet.</p>
+  <p>You can still:</p>
+  <ul>
+    <li>Enter / edit stats through the live-entry app</li>
+    <li>Download the raw GWT JSON payload from <a href="/game/{{ game.id }}/statboxscore.json">statboxscore.json</a></li>
+  </ul>
+</div>
+{% endblock %}

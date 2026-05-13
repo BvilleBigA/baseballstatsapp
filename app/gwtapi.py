@@ -2006,24 +2006,12 @@ def save_boxscore():
     if not game:
         return jsonify({"ok": True})
 
-    # --- Store raw GWT boxscore blob ---
-    raw_bs = request.form.get('bs', '')
-    if raw_bs:
-        try:
-            _bs = json_mod.loads(raw_bs)
-            _sanitize_boxscore_batting_order(_bs)
-            _sync_live_count_in_boxscore(_bs)
-            game.gwt_bs_blob = json_mod.dumps(_bs)
-        except (ValueError, TypeError):
-            game.gwt_bs_blob = raw_bs
-
     try:
         es = json_mod.loads(request.form.get('es') or '{}')
     except (ValueError, TypeError):
         es = {}
-    statuscode = int(es.get('statuscode', -2) or -2)
     try:
-        statuscode = int(statuscode)
+        statuscode = int(es.get('statuscode', -2) or -2)
     except (TypeError, ValueError):
         statuscode = -2
 
@@ -2034,7 +2022,13 @@ def save_boxscore():
     except (ValueError, TypeError):
         return jsonify({"ok": True})
 
-    _persist_boxscore_full(game, bs, statuscode=statuscode, live_stats_raw=live_stats_raw)
+    # Dispatch persistence to the sport handler. Baseball/softball still go
+    # through the heavyweight per-stat persist; football and future sports
+    # store the blob (+ a quarter line score) and skip the diamond tables.
+    from app.sports import get_sport_for_game
+    sport = get_sport_for_game(game)
+    sport.persist_save(game, bs, statuscode=statuscode, live_stats_raw=live_stats_raw)
+
     db.session.commit()
     try:
         from app.xmlapi import write_livestats_xml
@@ -2069,14 +2063,10 @@ def process_raw_play():
     except (ValueError, TypeError):
         return jsonify({"ok": True})
 
-    # Store blob and run full saveboxscore persist (inning scores, stats, plays)
-    _sanitize_boxscore_batting_order(bs)
-    _sanitize_boxscore_names(bs)
-    _sync_live_count_in_boxscore(bs)
-    game.gwt_bs_blob = _json.dumps(bs)
-
-    # statuscode=-2: don't change is_complete from GWT; live_stats_raw='': don't change entry_mode
-    _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw='')
+    # Dispatch persistence to the sport handler. statuscode=-2 means "don't change
+    # is_complete from GWT", live_stats_raw='' means "don't change entry_mode".
+    from app.sports import get_sport_for_game
+    get_sport_for_game(game).persist_save(game, bs, statuscode=-2, live_stats_raw='')
 
     db.session.commit()
     try:
@@ -2112,19 +2102,27 @@ def opponent_rosters():
 
 @gwtapi_bp.route('/download.jspd', methods=['GET'])
 def download_pdf():
+    """GWT 'Download PDF' button. Routes to the sport-aware PDF view.
+
+    Style is picked up from the query string (default 'full') so the same
+    endpoint serves football's full/summary/pbp templates and baseball's
+    compact print page.
+    """
     from flask import redirect
     event_id = request.args.get('evt', request.args.get('event_id', ''))
+    style = request.args.get('style', '')
     if event_id and str(event_id).isdigit():
-        # Redirect to XML URL — opens in browser (inline); user can right-click to save
-        return redirect(f'/game/{event_id}/boxscore.xml')
+        qs = f'?style={style}' if style else ''
+        return redirect(f'/game/{event_id}/boxscore.pdf{qs}')
     return redirect(f'/action/stats/downloadXML.jsp?evt={event_id}')
 
 
 @gwtapi_bp.route('/downloadXML.jsp', methods=['GET'])
 def download_xml():
+    """GWT 'Download XML' button. Dispatches the sport-aware XML builder."""
     from flask import Response, redirect
     from app.models import Game
-    from app.xmlapi import build_bsgame_xml
+    from app.sports import get_sport_for_game
     evt = (request.args.get('evt') or request.args.get('event_id') or request.args.get('id', '')).strip()
     # Presto/GWT may use ?t= as cache buster; some links pass event as id. Accept t if it looks like game id (small int)
     if not evt and request.args.get('t'):
@@ -2134,7 +2132,7 @@ def download_xml():
     if evt and str(evt).isdigit():
         game = Game.query.get(int(evt))
         if game:
-            xml_str = build_bsgame_xml(game)
+            xml_str = get_sport_for_game(game).build_xml(game)
             fname = f"boxscore_{(game.date or 'nodate').replace('-', '')}_{evt}"
             # inline = open in browser; user can right-click to save
             # no-cache so reload picks up GWT edits without reclicking

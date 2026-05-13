@@ -2418,15 +2418,10 @@ def stat_boxscore(event_id):
     if err:
         return redirect(url_for('main.login'))
     game = Game.query.get_or_404(event_id)
-    season = None
-    if game.visitor_team:
-        season = Season.query.get(game.visitor_team.season_id)
-    data = _boxscore_data(game)
-    return render_template('statboxscore.html',
-                           current_user=user,
-                           game=game,
-                           season=season,
-                           data=data)
+    season = game.season
+    from app.sports import get_sport_for_game
+    sport = get_sport_for_game(game)
+    return sport.render_html(game, current_user=user, season=season)
 
 
 @main_bp.route('/game/<int:event_id>/statboxscore.json')
@@ -2435,7 +2430,8 @@ def stat_boxscore_json(event_id):
     if err:
         return jsonify({'ok': False}), 401
     game = Game.query.get_or_404(event_id)
-    return jsonify(_boxscore_data(game))
+    from app.sports import get_sport_for_game
+    return get_sport_for_game(game).render_json(game)
 
 
 # ── Game detail (Add Play UI) and API ───────────────────────────────────────
@@ -2761,62 +2757,20 @@ def api_games_lineups(game_id):
 @main_bp.route('/game/<int:event_id>/boxscore.pdf')
 def stat_boxscore_pdf(event_id):
     """Render a print-friendly boxscore page (user can Print → Save as PDF).
-    The HTML template is sport-specific — football, baseball, softball each
-    have their own renderer via app.sports plugins."""
+
+    Dispatches by sport. `?style=full|summary|pbp` is forwarded to the
+    sport handler; football also accepts `?qtr=` for the per-quarter PBP.
+    """
     user, err = _require_login()
     if err:
         return redirect(url_for('main.login'))
     game   = Game.query.get_or_404(event_id)
-    season = None
-    if game.visitor_team:
-        season = Season.query.get(game.visitor_team.season_id)
-    from app.sports import get_plugin_for
-    plugin = get_plugin_for(game)
-    try:
-        data = plugin.build_boxscore_data(game)
-    except Exception:
-        data = _boxscore_data(game)
-    return render_template(plugin.boxscore_template, game=game, season=season, data=data)
-
-
-@main_bp.route('/game/<int:event_id>/boxscore.json')
-def stat_boxscore_json_download(event_id):
-    """Sport-aware JSON boxscore. For football this is the canonical GWT blob
-    (matches Presto's downloadable boxscore JSON); for diamond sports it's the
-    server-rendered boxscore data dict."""
-    user, err = _require_login()
-    if err:
-        return jsonify({'ok': False}), 401
-    game = Game.query.get_or_404(event_id)
-    from app.sports import get_plugin_for
-    plugin = get_plugin_for(game)
-    try:
-        payload = plugin.build_json(game)
-    except Exception:
-        payload = _boxscore_data(game)
-    force_dl = request.args.get('download', '0') == '1'
-    resp = jsonify(payload)
-    if force_dl:
-        fname = f"boxscore_{(game.date or 'nodate').replace('-', '')}_{event_id}.json"
-        resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
-    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    return resp
-
-
-@main_bp.route('/game/<int:event_id>/scoring')
-def stat_scoring_summary(event_id):
-    """Sport-aware standalone scoring summary HTML page."""
-    user, err = _require_login()
-    if err:
-        return redirect(url_for('main.login'))
-    game = Game.query.get_or_404(event_id)
-    from app.sports import get_plugin_for
-    plugin = get_plugin_for(game)
-    try:
-        data = plugin.build_boxscore_data(game)
-    except Exception:
-        data = _boxscore_data(game)
-    return render_template('scoring_summary.html', game=game, data=data, plugin_name=plugin.name)
+    season = game.season
+    style  = (request.args.get('style') or 'full').lower()
+    from app.sports import get_sport_for_game
+    return get_sport_for_game(game).render_pdf(
+        game, style=style, current_user=user, season=season
+    )
 
 
 # ── Stat History (Gameday Stats viewStatHistory.jsp) ──────────────────────────
@@ -2934,8 +2888,8 @@ def download_version():
     fname   = f"boxscore_{(game.date or 'nodate').replace('-','')}_{version_key}"
 
     if fmt == 'xml':
-        from app.xmlapi import build_bsgame_xml
-        xml_str = build_bsgame_xml(game)
+        from app.sports import get_sport_for_game
+        xml_str = get_sport_for_game(game).build_xml(game)
         from flask import Response
         return Response(xml_str, mimetype='application/xml',
                         headers={'Content-Disposition': f'attachment; filename="{fname}.xml"'})
