@@ -242,17 +242,38 @@ class Game(db.Model):
         return self.is_complete or bool(self.innings) or bool(self.batting_stats)
 
     @property
+    def season(self):
+        """Resolve Season via visitor or home team (Game has no direct season FK)."""
+        if self.visitor_team and getattr(self.visitor_team, "season", None):
+            return self.visitor_team.season
+        if self.home_team and getattr(self.home_team, "season", None):
+            return self.home_team.season
+        return None
+
+    @property
+    def sport_id(self):
+        """Integer stats-engine sport id (0=Football, 1=Baseball, 11=Softball, ...). Defaults to 1.
+        Note: 0 is a valid sport_id (Football), so we cannot use ``or 1`` to coerce."""
+        s = self.season
+        if s is None or s.sport_id is None:
+            return 1
+        return int(s.sport_id)
+
+    @property
     def status_label(self):
-        """Human-readable game status: score + inning/half or Final."""
+        """Human-readable game status: score + inning/half (baseball/softball) or Final / In Progress (other sports)."""
         def _ord(n):
             if 11 <= (n % 100) <= 13:
                 return f"{n}th"
             return f"{n}" + {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
 
+        sport_id = self.season.sport_id if self.season else 1
+        is_diamond = sport_id in (1, 11)  # 1=Baseball, 11=Softball
+
         if self.is_complete:
             return f"{self.visitor_runs}-{self.home_runs} Final"
 
-        if self.innings:
+        if is_diamond and self.innings:
             inning_map = {i.inning: i for i in self.innings}
             last_num = max(inning_map.keys())
             last = inning_map[last_num]
@@ -263,17 +284,21 @@ class Game(db.Model):
                 v, h = 0, 0
             vr = self.visitor_runs or 0
             hr = self.home_runs or 0
-            # Visitor scored but home hasn't batted yet in that inning → bottom half
             if v > 0 and h == 0:
                 return f"{vr}-{hr} Bot of {_ord(last_num)}"
-            # Both halves complete → top of next inning
             return f"{vr}-{hr} Top of {_ord(last_num + 1)}"
 
         if self.batting_stats:
             return f"{self.visitor_runs or 0}-{self.home_runs or 0} In Progress"
 
         if self.has_lineup:
-            return "0-0 Top of 1st"
+            if is_diamond:
+                return "0-0 Top of 1st"
+            if sport_id == 0:  # Football
+                return "0-0 1st Quarter"
+            if sport_id == 2:  # Basketball
+                return "0-0 1st"
+            return "0-0 In Progress"
 
         return None  # not started
 

@@ -1,0 +1,71 @@
+{# Sport-agnostic scoring summary page. Uses the `data.scoring_summary` rows
+   produced by every SportPlugin.build_boxscore_data. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scoring Summary — {{ data.visitor_name }} vs. {{ data.home_name }}</title>
+<link rel="icon" type="image/png" href="/static/favicon.png" sizes="512x512">
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #222; margin: 20px; background: #fff; }
+  h1 { font-size: 16px; text-align: center; margin: 0 0 4px; }
+  p.sub { text-align: center; color: #666; font-size: 11px; margin: 0 0 14px; }
+  .header-row { display: flex; justify-content: center; align-items: center; gap: 22px; margin-bottom: 18px; }
+  .header-row .team { text-align: center; }
+  .header-row .team .name { font-weight: 700; font-size: 14px; }
+  .header-row .team .score { font-size: 30px; font-weight: 700; line-height: 1; }
+  table.scoring { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.scoring th, table.scoring td { border: 1px solid #ccc; padding: 4px 8px; }
+  table.scoring thead th { background: #333; color: #fff; }
+  .center { text-align: center; } .right { text-align: right; }
+  .empty { text-align: center; color: #888; padding: 30px; }
+  .print-bar { text-align: center; margin-bottom: 16px; }
+  .print-bar button { padding: 6px 18px; background: #333; color: #fff; border: none; cursor: pointer; font-size: 12px; border-radius: 3px; }
+  @media print { .print-bar { display: none; } body { margin: 10px; } }
+</style>
+</head>
+<body>
+
+<div class="print-bar">
+  <button onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<h1>{{ plugin_name }} Scoring Summary</h1>
+<p class="sub">{{ data.visitor_name }} vs. {{ data.home_name }} — {{ data.date }}{% if data.location %} — {{ data.location }}{% endif %}</p>
+
+<div class="header-row">
+  <div class="team"><div class="name">{{ data.visitor_name }}</div><div class="score">{{ data.visitor_score or data.visitor_runs or 0 }}</div></div>
+  <div style="font-size:11px;color:#555;">{{ data.status_label or '' }}</div>
+  <div class="team"><div class="name">{{ data.home_name }}</div><div class="score">{{ data.home_score or data.home_runs or 0 }}</div></div>
+</div>
+
+{% if data.scoring_summary %}
+<table class="scoring">
+  <thead>
+    <tr>
+      <th>PRD</th>
+      <th>Time</th>
+      <th>Team</th>
+      <th>Description</th>
+      <th>Score</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in data.scoring_summary %}
+    <tr>
+      <td class="center">{{ s.prd }}</td>
+      <td class="center">{{ s.time }}</td>
+      <td>{{ s.team }}</td>
+      <td>{{ s.text }}</td>
+      <td class="right">{{ s.vscore }} - {{ s.hscore }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No scoring yet.</p>
+{% endif %}
+
+</body>
+</html>

@@ -440,7 +440,7 @@ def statgame():
 
     season_id = request.args.get('season_id')
     event_id = request.args.get('event_id')
-    sport_code = request.args.get('sport_code', '1')
+    sport_code_param = request.args.get('sport_code')
 
     if not season_id:
         first_season = Season.query.first()
@@ -450,6 +450,19 @@ def statgame():
         event_id = str(first_game.id) if first_game else '1'
 
     game = Game.query.get(int(event_id)) if event_id.isdigit() else None
+
+    # sport_code (passed to GWT) is the stats-engine int: 0=Football,1=Baseball,11=Softball,…
+    # Prefer URL param, then game's season, then plain Season lookup, then default to baseball.
+    sport_code = sport_code_param
+    if sport_code is None or sport_code == '':
+        if game and game.visitor_team and game.visitor_team.season:
+            sport_code = str(game.visitor_team.season.sport_id or 1)
+        elif season_id and season_id.isdigit():
+            s = Season.query.get(int(season_id))
+            if s:
+                sport_code = str(s.sport_id or 1)
+    if not sport_code:
+        sport_code = '1'
 
     # Convert YYYY-MM-DD → M/D/YYYY (required by isLoadingOneGame() for auto-auth)
     event_date = ''
@@ -477,7 +490,7 @@ def statsentry_static(filename):
     filepath = os.path.join(base, filename)
     # Fallback: serve the WebKit cache file for any unknown .cache.js request
     if 'statentry/' in filename and filename.endswith('.cache.js') and not os.path.exists(filepath):
-        filename = 'statentry/9CF75CF4CE787752B1D6376959488943.cache.js'
+        filename = 'statentry/70B3F4F3D8FAA928D5E5727C030CF404.cache.js'
     return send_from_directory(base, filename)
 
 
@@ -957,6 +970,18 @@ def _softball_status_options():
     return _baseball_status_options()
 
 
+def _football_status_options():
+    """Quarter / OT statuses for football."""
+    opts = ['Final', 'Final - OT']
+    for i in range(2, 11):
+        opts.append(f"Final - {i}OT")
+    opts.extend([
+        '1st Quarter', '2nd Quarter', 'Halftime',
+        '3rd Quarter', '4th Quarter', 'End of Regulation',
+    ])
+    return opts
+
+
 def _generic_status_options():
     opts = ['Final']
     for i in range(1, 18):
@@ -965,7 +990,7 @@ def _generic_status_options():
 
 
 STATUS_OPTIONS_BY_SPORT = {
-    0:  _generic_status_options(),    # football
+    0:  _football_status_options(),   # football
     1:  _baseball_status_options(),   # baseball
     2:  _generic_status_options(),    # basketball
     3:  _generic_status_options(),    # soccer
@@ -2735,7 +2760,9 @@ def api_games_lineups(game_id):
 
 @main_bp.route('/game/<int:event_id>/boxscore.pdf')
 def stat_boxscore_pdf(event_id):
-    """Render a print-friendly boxscore page (user can Print → Save as PDF)."""
+    """Render a print-friendly boxscore page (user can Print → Save as PDF).
+    The HTML template is sport-specific — football, baseball, softball each
+    have their own renderer via app.sports plugins."""
     user, err = _require_login()
     if err:
         return redirect(url_for('main.login'))
@@ -2743,8 +2770,53 @@ def stat_boxscore_pdf(event_id):
     season = None
     if game.visitor_team:
         season = Season.query.get(game.visitor_team.season_id)
-    data = _boxscore_data(game)
-    return render_template('boxscore_print.html', game=game, season=season, data=data)
+    from app.sports import get_plugin_for
+    plugin = get_plugin_for(game)
+    try:
+        data = plugin.build_boxscore_data(game)
+    except Exception:
+        data = _boxscore_data(game)
+    return render_template(plugin.boxscore_template, game=game, season=season, data=data)
+
+
+@main_bp.route('/game/<int:event_id>/boxscore.json')
+def stat_boxscore_json_download(event_id):
+    """Sport-aware JSON boxscore. For football this is the canonical GWT blob
+    (matches Presto's downloadable boxscore JSON); for diamond sports it's the
+    server-rendered boxscore data dict."""
+    user, err = _require_login()
+    if err:
+        return jsonify({'ok': False}), 401
+    game = Game.query.get_or_404(event_id)
+    from app.sports import get_plugin_for
+    plugin = get_plugin_for(game)
+    try:
+        payload = plugin.build_json(game)
+    except Exception:
+        payload = _boxscore_data(game)
+    force_dl = request.args.get('download', '0') == '1'
+    resp = jsonify(payload)
+    if force_dl:
+        fname = f"boxscore_{(game.date or 'nodate').replace('-', '')}_{event_id}.json"
+        resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
+
+
+@main_bp.route('/game/<int:event_id>/scoring')
+def stat_scoring_summary(event_id):
+    """Sport-aware standalone scoring summary HTML page."""
+    user, err = _require_login()
+    if err:
+        return redirect(url_for('main.login'))
+    game = Game.query.get_or_404(event_id)
+    from app.sports import get_plugin_for
+    plugin = get_plugin_for(game)
+    try:
+        data = plugin.build_boxscore_data(game)
+    except Exception:
+        data = _boxscore_data(game)
+    return render_template('scoring_summary.html', game=game, data=data, plugin_name=plugin.name)
 
 
 # ── Stat History (Gameday Stats viewStatHistory.jsp) ──────────────────────────

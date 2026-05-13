@@ -1,10 +1,6 @@
 @font-face {
   font-family: 'statsentry-icons';
-  src: url('font/statsentry.eot?33438961');
-  src: url('font/statsentry.eot?33438961#iefix') format('embedded-opentype'),
-       url('font/statsentry.woff?33438961') format('woff'),
-       url('font/statsentry.ttf?33438961') format('truetype'),
-       url('font/statsentry.svg?33438961#fontello') format('svg');
+  src: url('font/statsentry.woff?33438961') format('woff');
   font-weight: normal;
   font-style: normal;
 }

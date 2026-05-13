@@ -360,8 +360,8 @@ function statentry(){
     }
     var strongName;
     try {
-      unflattenKeylistIntoAnswers(['safari'], '222AE26ECF7C5928C23FEC8041738D9D');
-      unflattenKeylistIntoAnswers(['gecko1_8'], '222AE26ECF7C5928C23FEC8041738D9D');
+      unflattenKeylistIntoAnswers(['gecko1_8'], '70B3F4F3D8FAA928D5E5727C030CF404');
+      unflattenKeylistIntoAnswers(['safari'], '70B3F4F3D8FAA928D5E5727C030CF404');
       strongName = answers[computePropValue('user.agent')];
       var idx = strongName.indexOf(':');
       if (idx != -1) {
