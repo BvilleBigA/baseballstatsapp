@@ -455,6 +455,21 @@ def _gwt_blob_latest_play(bs):
     return last_key, last_play
 
 
+def _names_match_for_status(a, b):
+    """Loose equality for comparing GWT status-line names to play/roster names."""
+    if not a or not b:
+        return False
+    def _fold(s):
+        return re.sub(r'[^a-z0-9]+', '', (s or '').lower())
+    fa, fb = _fold(a), _fold(b)
+    if not fa or not fb:
+        return False
+    if fa == fb:
+        return True
+    shorter, longer = (fa, fb) if len(fa) <= len(fb) else (fb, fa)
+    return len(shorter) >= 4 and shorter in longer
+
+
 def _gwt_status_line_dict(game):
     """
     Status-line fields from the persisted GWT blob (eventInfo + raw plays).
@@ -548,15 +563,19 @@ def _gwt_status_line_dict(game):
                     return p.get('completeName') or p.get('lastName') or ''
             return None
 
-        # Resolve batter if missing
-        if not batter_name:
-            off_team = home_team_blob if is_home_off else vis_team_blob
-            off_idx = 1 if is_home_off else 0
-            cbo = off_team.get('currentBattingOrder', [])
-            b_idx = current_batter_idx[off_idx]
-            if isinstance(cbo, list) and 0 <= b_idx < len(cbo):
-                batter_uni = cbo[b_idx]
-                batter_name = _find_name_by_uni(off_team, batter_uni)
+        # Batter at the active uniform from currentBattingOrder. Prefer over eventInfo.batter
+        # when they disagree: GWT often leaves batter=pinch-runner text after the original
+        # batter re-enters that lineup spot.
+        off_team = home_team_blob if is_home_off else vis_team_blob
+        off_idx = 1 if is_home_off else 0
+        cbo = off_team.get('currentBattingOrder', [])
+        b_idx = current_batter_idx[off_idx]
+        slot_batter = None
+        if isinstance(cbo, list) and 0 <= b_idx < len(cbo):
+            slot_batter = _find_name_by_uni(off_team, cbo[b_idx])
+        if slot_batter:
+            if not batter_name or not _names_match_for_status(batter_name, slot_batter):
+                batter_name = slot_batter
 
         # Resolve pitcher if missing
         if not pitcher_name:
@@ -3758,7 +3777,13 @@ def build_bsgame_xml(game):
                 status_batter = _fullname(extracted) or extracted
 
         if gwt_line and gwt_line.get('batter'):
-            status_batter = gwt_line['batter']
+            gwt_b = (gwt_line['batter'] or '').strip()
+            play_b = (status_batter or '').strip()
+            if not play_b:
+                status_batter = gwt_b
+            elif _names_match_for_status(play_b, gwt_b):
+                status_batter = gwt_b
+            # else: keep play-derived / roster walk — eventInfo batter is often stale after PR + re-entry
 
         st_first, st_second, st_third = '', '', ''
         if status_outs < 3:
