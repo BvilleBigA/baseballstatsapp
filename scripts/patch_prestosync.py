@@ -35,6 +35,26 @@ NEW_DEFAULT = "https://stats.bvillebiga.com/api"
 TEXT_SUFFIXES = {".js", ".json", ".html", ".htm", ".map", ".css"}
 
 
+def _npx_argv(*parts: str) -> list[str]:
+    """On Windows, npx is a .cmd shim — run via cmd /c so CreateProcess can launch it."""
+    if sys.platform == "win32":
+        return ["cmd", "/c", "npx", *parts]
+    return ["npx", *parts]
+
+
+def _ensure_npx_works() -> None:
+    cmd = _npx_argv("--version")
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        out = (r.stderr or r.stdout or "").strip()
+        print(
+            "Node.js / npx not available. Install Node from https://nodejs.org/\n"
+            f"Tried: {' '.join(cmd)!r} (exit {r.returncode})\n{out}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+
 def _run(cmd: list[str], **kw) -> None:
     print("+", " ".join(cmd))
     subprocess.run(cmd, check=True, **kw)
@@ -111,6 +131,8 @@ def main() -> int:
         print("Old and new URL are the same; nothing to do.")
         return 0
 
+    _ensure_npx_works()
+
     backup = asar.with_suffix(f".asar.bak-{Path(__file__).stem}")
     if not backup.exists():
         shutil.copy2(asar, backup)
@@ -121,14 +143,13 @@ def main() -> int:
         extracted = tdir / "extracted"
         packed = tdir / "app.asar.new"
         _run(
-            [
-                "npx",
+            _npx_argv(
                 "--yes",
                 "@electron/asar",
                 "extract",
                 str(asar),
                 str(extracted),
-            ]
+            )
         )
         n = _replace_in_tree(extracted, old_u, new_u)
         if n == 0:
@@ -140,14 +161,13 @@ def main() -> int:
             return 1
         print(f"Replaced URL in {n} file(s).")
         _run(
-            [
-                "npx",
+            _npx_argv(
                 "--yes",
                 "@electron/asar",
                 "pack",
                 str(extracted),
                 str(packed),
-            ]
+            )
         )
         shutil.copy2(packed, asar)
         print(f"Wrote {asar}")

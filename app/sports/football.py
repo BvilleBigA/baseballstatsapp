@@ -593,7 +593,7 @@ def build_xml(game):
     vis_view, home_view = data['visitor'], data['home']
 
     root = ET.Element('fbgame')
-    _set(root, source='PrestoSports', version='7.16.0',
+    _set(root, source='Gameday Stats', version='7.16.0',
          generated=_date.today().strftime('%m/%d/%Y'))
 
     # ── <venue>/<officials>/<rules> ────────────────────────────────────
