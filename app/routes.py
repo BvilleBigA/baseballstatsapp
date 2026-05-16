@@ -476,22 +476,40 @@ def statgame():
         today = date.today()
         event_date = f"{today.month}/{today.day}/{today.year}"
 
+    statentry_ver = (current_app.config.get('STATENTRY_ASSET_VERSION') or '').strip()
+    if not statentry_ver:
+        base = os.path.join(current_app.root_path, 'static', 'gamedaystats', 'statsentry')
+        st_sub = os.path.join(base, 'statentry')
+        mt = 0.0
+        for folder in (base, st_sub):
+            if not os.path.isdir(folder):
+                continue
+            for name in os.listdir(folder):
+                if not name.endswith(('.js', '.css')):
+                    continue
+                p = os.path.join(folder, name)
+                if os.path.isfile(p):
+                    mt = max(mt, os.path.getmtime(p))
+        statentry_ver = str(int(mt)) if mt else '1'
+
     return render_template('statgame.html',
                            current_user=current_user,
                            season_id=season_id,
                            event_id=event_id,
                            sport_code=sport_code,
-                           event_date=event_date)
+                           event_date=event_date,
+                           statentry_ver=statentry_ver)
 
 
 @main_bp.route('/action/stats/statsentry/<path:filename>')
 def statsentry_static(filename):
     base = os.path.join(current_app.root_path, 'static', 'gamedaystats', 'statsentry')
-    filepath = os.path.join(base, filename)
-    # Fallback: serve the WebKit cache file for any unknown .cache.js request
-    if 'statentry/' in filename and filename.endswith('.cache.js') and not os.path.exists(filepath):
-        filename = 'statentry/70B3F4F3D8FAA928D5E5727C030CF404.cache.js'
-    return send_from_directory(base, filename)
+    response = send_from_directory(base, filename)
+    low = filename.lower()
+    if low.endswith(('.js', '.css', '.woff', '.woff2', '.png', '.gif')):
+        # GWT/Presto push new *.cache.js / nocache builds often; avoid sticky browser/CDN caches.
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    return response
 
 
 # ── Gameday admin page ────────────────────────────────────────────────────────

@@ -7,11 +7,11 @@
 <meta name="viewport" content="768px, maximum-scale=1" />
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
 
-<link rel="stylesheet" type="text/css" href="reset.css" />
-<link rel="stylesheet" type="text/css" href="main.css" />
-<link type="text/css" rel="stylesheet" href="statentry.css">
-<link type="text/css" rel="stylesheet" href="statsentry_icons.css">
-<link href="portrait.css" rel="stylesheet" type="css" media="all and (orientation:portrait)">
+<link rel="stylesheet" type="text/css" href="reset.css?v={{ statentry_ver }}" />
+<link rel="stylesheet" type="text/css" href="main.css?v={{ statentry_ver }}" />
+<link type="text/css" rel="stylesheet" href="statentry.css?v={{ statentry_ver }}">
+<link type="text/css" rel="stylesheet" href="statsentry_icons.css?v={{ statentry_ver }}">
+<link href="portrait.css?v={{ statentry_ver }}" rel="stylesheet" type="css" media="all and (orientation:portrait)">
 
 <style type="text/css">
     div#cacheStatus {
@@ -69,11 +69,11 @@
     }
 </style>
 
-<script src="jquery.min.js" type="text/javascript"></script>
-<script src="util.js" type="text/javascript"></script>
-<script src="cjson.js" type="text/javascript"></script>
-<script src="jszip.min.js" type="text/javascript"></script>
-<script src="fileSaver.min.js" type="text/javascript"></script>
+<script src="jquery.min.js?v={{ statentry_ver }}" type="text/javascript"></script>
+<script src="util.js?v={{ statentry_ver }}" type="text/javascript"></script>
+<script src="cjson.js?v={{ statentry_ver }}" type="text/javascript"></script>
+<script src="jszip.min.js?v={{ statentry_ver }}" type="text/javascript"></script>
+<script src="fileSaver.min.js?v={{ statentry_ver }}" type="text/javascript"></script>
 
 <script type="text/javascript">
     window.demo = false;
@@ -93,8 +93,8 @@
     }
 </script>
 
-<script type="text/javascript" language="javascript" src="./appCache.js"></script>
-<script type="text/javascript" language="javascript" src="./statentry/statentry.nocache.js"></script>
+<script type="text/javascript" language="javascript" src="./appCache.js?v={{ statentry_ver }}"></script>
+<script type="text/javascript" language="javascript" src="./statentry/statentry.nocache.js?v={{ statentry_ver }}"></script>
 
 <script>
     var isIE = (navigator.userAgent.toLowerCase().indexOf("msie") != -1);

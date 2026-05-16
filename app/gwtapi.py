@@ -1988,6 +1988,15 @@ def _persist_boxscore_full(game, bs, statuscode=-2, live_stats_raw=''):
     # Parse and persist plays (same as saveGame — reference stat entry saves XML data on both paths)
     _parse_and_persist_plays(game, bs, _int)
 
+    # saveboxscore / processRawPlay only hit this path; they must refresh the blob too.
+    # XML export prefers eventInfo + raw plays from gwt_bs_blob for the live <status> line.
+    _sanitize_boxscore_batting_order(bs)
+    _sync_live_count_in_boxscore(bs)
+    try:
+        game.gwt_bs_blob = json.dumps(bs)
+    except (TypeError, ValueError):
+        pass
+
     _save_version(game)
 
 
